@@ -1,0 +1,5 @@
+module FreeTDS [system] {
+	header "/opt/homebrew/include/sybdb.h" //not ideal, but xcode cannot find sybdb.h unless it's specific
+	link "sybdb"
+	export *
+}
