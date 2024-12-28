@@ -5,6 +5,9 @@ import PackageDescription
 
 let package = Package(
     name: "FreeTDSKit",
+    platforms: [
+        .macOS(.v13)
+       ],
     products: [
         .library(
             name: "FreeTDSKit",
