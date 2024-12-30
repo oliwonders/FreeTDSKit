@@ -19,11 +19,11 @@ let package = Package(
     targets: [
         .target(
                     name: "CFreeTDS",
+                    dependencies: ["FreeTDS"],
                     path: "Sources/CFreeTDS",
                     publicHeadersPath: "include",
                     cSettings: [
-                        .headerSearchPath("opt/homebrew/include/sybdb.h")
-                        
+                        .headerSearchPath("opt/homebrew/include")
                     ],
                     linkerSettings: [
                         .linkedLibrary("sybdb") // Links the FreeTDS library
@@ -38,10 +38,10 @@ let package = Package(
             name: "FreeTDSKitTests",
             dependencies: ["FreeTDSKit"]
         ),
-//        .systemLibrary(
-//            name: "FreeTDS",
-//            providers: [
-//                .brew(["freetds"])
-//        ])
+        .systemLibrary(
+            name: "FreeTDS",
+            providers: [
+                .brew(["freetds"])
+        ])
     ]
 )

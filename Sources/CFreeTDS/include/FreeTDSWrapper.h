@@ -9,7 +9,8 @@
 #ifndef FreeTDSWrapper_h
 #define FreeTDSWrapper_h
 
-#include "/opt/homebrew/include/sybdb.h"
+#include <sybdb.h>
+//#include "/opt/homebrew/include/sybdb.h"
 
 // Structure to hold a single row's data
 typedef struct {

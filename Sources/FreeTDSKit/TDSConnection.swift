@@ -7,6 +7,7 @@
 
 import Foundation
 import CFreeTDS
+import Logging
 
 public class TDSConnection {
     private var connection: OpaquePointer?

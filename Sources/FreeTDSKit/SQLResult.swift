@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  SQLResult
 //  FreeTDSKit
 //
 //  Created by David Oliver on 12/28/24.

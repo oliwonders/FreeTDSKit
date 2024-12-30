@@ -1,6 +1,6 @@
 module CFreeTDS {
     header "FreeTDSWrapper.h"
-	header "/opt/homebrew/include/sybdb.h"
+	header "sybdb.h"
 	link "sybdb"
 	export *
 }

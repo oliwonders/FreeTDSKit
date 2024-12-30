@@ -6,7 +6,8 @@
 //
 #include <stdlib.h>
 #include <string.h>
-#include "/opt/homebrew/include/sybdb.h"
+#include <sybdb.h>
+//#include "/opt/homebrew/include/sybdb.h"
 
 #include "FreeTDSWrapper.h"
 
