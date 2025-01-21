@@ -4,10 +4,11 @@
 //
 //  Created by David Oliver on 12/27/24.
 //
+
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sybdb.h>
-//#include "/opt/homebrew/include/sybdb.h"
 
 #include "FreeTDSWrapper.h"
 
@@ -58,7 +59,7 @@ int executeQuery(DBPROCESS* dbproc, const char* query) {
 
 // Fetch results
 // Function to fetch results and return an array of RowData
-RowData* fetchResults(DBPROCESS* dbproc, int* rowCount) {
+RowData* fetchResultsWithType(DBPROCESS* dbproc, int* rowCount) {
     int result_code;
     int rows_allocated = 10; // Initial allocation size
     int current_row = 0;
@@ -75,16 +76,10 @@ RowData* fetchResults(DBPROCESS* dbproc, int* rowCount) {
 
             while (dbnextrow(dbproc) != NO_MORE_ROWS) {
                 if (current_row >= rows_allocated) {
-                    // Reallocate more space if needed
                     rows_allocated *= 2;
                     RowData* temp = realloc(rows, rows_allocated * sizeof(RowData));
                     if (temp == NULL) {
-                        // Handle memory allocation failure
-                        for (int i = 0; i < current_row; i++) {
-                            free(rows[i].columnNames);
-                            free(rows[i].columnValues);
-                        }
-                        free(rows);
+                        freeFetchedResults(rows, current_row);
                         *rowCount = 0;
                         return NULL;
                     }
@@ -94,14 +89,10 @@ RowData* fetchResults(DBPROCESS* dbproc, int* rowCount) {
                 rows[current_row].columnCount = ncols;
                 rows[current_row].columnNames = malloc(ncols * sizeof(char*));
                 rows[current_row].columnValues = malloc(ncols * sizeof(char*));
+                rows[current_row].columnTypes = malloc(ncols * sizeof(int));
 
-                if (rows[current_row].columnNames == NULL || rows[current_row].columnValues == NULL) {
-                    // Handle memory allocation failure
-                    for (int i = 0; i <= current_row; i++) {
-                        free(rows[i].columnNames);
-                        free(rows[i].columnValues);
-                    }
-                    free(rows);
+                if (!rows[current_row].columnNames || !rows[current_row].columnValues || !rows[current_row].columnTypes) {
+                    freeFetchedResults(rows, current_row);
                     *rowCount = 0;
                     return NULL;
                 }
@@ -110,13 +101,35 @@ RowData* fetchResults(DBPROCESS* dbproc, int* rowCount) {
                     const char* colName = dbcolname(dbproc, i);
                     int dataLength = dbdatlen(dbproc, i);
                     BYTE* data = dbdata(dbproc, i);
+                    int colType = dbcoltype(dbproc, i);
 
                     rows[current_row].columnNames[i - 1] = strdup(colName ? colName : "");
+                    rows[current_row].columnTypes[i - 1] = colType;
+
                     if (data && dataLength > 0) {
-                        rows[current_row].columnValues[i - 1] = malloc(dataLength + 1);
-                        if (rows[current_row].columnValues[i - 1] != NULL) {
-                            memcpy(rows[current_row].columnValues[i - 1], data, dataLength);
-                            rows[current_row].columnValues[i - 1][dataLength] = '\0'; // Null-terminate
+                        char* value = malloc(dataLength + 1);
+                        if (value) {
+                            memcpy(value, data, dataLength);
+                            value[dataLength] = '\0';
+
+                            switch (colType) {
+                                case SYBINT1:
+                                case SYBINT2:
+                                case SYBINT4:
+                                    snprintf(value, dataLength + 1, "%d", *(int*)data);
+                                    break;
+                                case SYBFLT8:
+                                case SYBREAL:
+                                    snprintf(value, dataLength + 1, "%f", *(double*)data);
+                                    break;
+                                case SYBDATETIME:
+                                    snprintf(value, dataLength + 1, "DateTime Data");
+                                    break;
+                                default:
+                                    // Leave value as is
+                                    break;
+                            }
+                            rows[current_row].columnValues[i - 1] = value;
                         }
                     } else {
                         rows[current_row].columnValues[i - 1] = strdup("");
@@ -140,6 +153,7 @@ void freeFetchedResults(RowData* rows, int rowCount) {
         }
         free(rows[i].columnNames);
         free(rows[i].columnValues);
+        free(rows[i].columnTypes);
     }
     free(rows);
 }

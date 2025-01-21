@@ -1,9 +1,6 @@
 import Foundation
 import CFreeTDS
 
-
-
-
 public struct FreeTDSKit {
     
     public static func getFreeTDSVersion() -> String {

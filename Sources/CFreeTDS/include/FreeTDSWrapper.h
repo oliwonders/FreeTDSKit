@@ -5,7 +5,6 @@
 //  Created by David Oliver on 12/27/24.
 //
 
-
 #ifndef FreeTDSWrapper_h
 #define FreeTDSWrapper_h
 
@@ -16,6 +15,7 @@
 typedef struct {
     char **columnNames;
     char **columnValues;
+    int *columnTypes; // Array to hold column data types (e.g., integers representing SYBINT, SYBREAL, etc.)
     int columnCount;
 } RowData;
 
@@ -24,7 +24,7 @@ const char* getDBVersion(void);
 int initializeDBLibrary(void);
 DBPROCESS* connectToDatabase(const char* server, const char* user, const char* password, const char* database);
 int executeQuery(DBPROCESS* dbproc, const char* query);
-RowData* fetchResults(DBPROCESS* dbproc, int* rowCount);
+RowData* fetchResultsWithType(DBPROCESS* dbproc, int* rowCount);
 void freeFetchedResults(RowData* rows, int rowCount);
 void closeConnection(DBPROCESS* dbproc);
 

@@ -1,4 +1,4 @@
-#FreeTDSKit
+# FreeTDSKit
 
 FreeTDSKit is a Swift wrapper for the FreeTDS library, enabling seamless connections to Microsoft SQL Server databases from Swift applications.
 
