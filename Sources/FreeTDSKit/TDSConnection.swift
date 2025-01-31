@@ -35,39 +35,52 @@ public class TDSConnection {
     }
 
  
-    public func execute(query: String) throws -> [SQLResult] {
-         guard let connection = connection else {
-             throw TDSConnectionError.notConnected
-         }
+    public func execute(query: String) throws -> SQLResult {
+        guard let connection = connection else {
+            throw TDSConnectionError.notConnected
+        }
 
-         let success = executeQuery(connection, query)
-         if success != 0 {
-             throw TDSConnectionError.queryExecutionFailed
-         }
+        let success = executeQuery(connection, query)
+        if success != 0 {
+            throw TDSConnectionError.queryExecutionFailed
+        }
 
-         var rowCount: Int32 = 0
-         guard let cRows = fetchResults(connection, &rowCount) else {
-             throw TDSConnectionError.queryExecutionFailed
-         }
+        var rowCount: Int32 = 0
+        guard let cRows = fetchResultsWithType(connection, &rowCount) else {
+            throw TDSConnectionError.queryExecutionFailed
+        }
 
-         var results: [SQLResult] = []
-         for i in 0..<Int(rowCount) {
-             let row = cRows[i]
-             var columns: [String: String] = [:]
+        var results: [[String: SQLDataType]] = []
+        let columnNames: [String] = []
 
-             for j in 0..<Int(row.columnCount) {
-                 if let colName = row.columnNames?[j], let colValue = row.columnValues?[j] {
-                     let columnName = String(cString: colName)
-                     let columnValue = String(cString: colValue)
-                     columns[columnName] = columnValue
-                 }
-             }
-             results.append(SQLResult(columns: columns))
-         }
+        for i in 0..<Int(rowCount) {
+            let row = cRows[i]
+            var rowDict: [String: SQLDataType] = [:]
+            
+            for j in 0..<Int(row.columnCount) {
+                if let colName = row.columnNames?[j], let colValue = row.columnValues?[j] {
+                    let columnName = String(cString: colName)
+                   // print("Processing column: \(j):\(columnName)")
 
-         freeFetchedResults(cRows, rowCount)
-         return results
-     }
+                    if let columnType = row.columnTypes?[j] {
+                        let sqlType = determineSQLType(colValue, columnType: Int(columnType))
+                        rowDict[columnName] = sqlType
+                    } else {
+                        print("Warning: columnType is nil for row \(i), column \(j)")
+                        rowDict[columnName] = .null
+                    }
+                } else {
+                    print("Error: Nil found for columnNames or columnValues at row \(i), column \(j)")
+                }
+            }
+            results.append(rowDict)
+        }
+
+        let affectedRows = Int(dbcount(connection))
+        freeFetchedResults(cRows, rowCount)
+
+        return SQLResult(columns: columnNames, rows: results, affectedRows: affectedRows)
+    }
 
     public func disconnect() {
         if let connection = connection {
