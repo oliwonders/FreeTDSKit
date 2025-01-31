@@ -4,12 +4,12 @@ services:
     platform: linux/amd64
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=yourStrongPassword1
+      - SA_PASSWORD=${FREETDSKIT_SQL_PASSWORD}
       - MSSQL_PID=Developer
     ports:
-      - "1433:1433"
+      - "${FREETDSKIT_SQL_PORT}:1433"
     healthcheck:
-      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "yourStrongPassword1" -Q "SELECT 1" || exit 1
-      interval: 10s
-      timeout: 3s
-      retries: 10
+        test: /opt/mssql-tools/bin/sqlcmd -S ${FREETDSKIT_SQL_SERVER},${FREETDSKIT_SQL_PORT} -U ${FREETDSKIT_SQL_USER} -P "${FREETDSKIT_SQL_PASSWORD}" -Q "SELECT 1" || exit 1
+        interval: 10s
+        timeout: 3s
+        retries: 10

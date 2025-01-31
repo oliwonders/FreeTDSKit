@@ -42,7 +42,6 @@ let package = Package(
         .testTarget(
             name: "FreeTDSKitIntegrationTests",
             dependencies: ["FreeTDSKit"],
-            exclude: ["Info.plist"],
             resources: [.copy("db-setup.sql"), .copy("docker-compose.yml"),.copy("run-integration-tests.sh")])
     ]
 )

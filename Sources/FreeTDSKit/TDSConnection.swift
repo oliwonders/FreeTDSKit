@@ -60,7 +60,7 @@ public class TDSConnection {
             for j in 0..<Int(row.columnCount) {
                 if let colName = row.columnNames?[j], let colValue = row.columnValues?[j] {
                     let columnName = String(cString: colName)
-                    print("Processing column: \(j):\(columnName)")
+                   // print("Processing column: \(j):\(columnName)")
 
                     if let columnType = row.columnTypes?[j] {
                         let sqlType = determineSQLType(colValue, columnType: Int(columnType))

@@ -1,10 +1,17 @@
 #!/bin/bash
 set -e  # Exit on error
 
-SQL_USER="${SQL_USER:-sa}"
-SQL_PASSWORD="${SQL_PASSWORD:-yourStrongPassword1}"
-SQL_PORT="${SQL_PORT:-1433}"
-SQL_DB="FreeTDSKitTestDB"
+FREETDSKIT_SQL_USER="${FREETDSKIT_SQL_USER:-sa}"
+FREETDSKIT_SQL_PASSWORD="${FREETDSKIT_SQL_PASSWORD:-YourStrongPassword1}"
+FREETDSKIT_SQL_SERVER="localhost"
+FREETDSKIT_SQL_PORT="${FREETDSKIT_SQL_PORT:-1438}"
+FREETDSKIT_SQL_DB="FreeTDSKitTestDB"
+
+export FREETDSKIT_SQL_SERVER
+export FREETDSKIT_SQL_PORT
+export FREETDSKIT_SQL_USER
+export FREETDSKIT_SQL_PASSWORD
+export FREETDSKIT_SQL_DB
 
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -38,7 +45,7 @@ else
 fi
 
 #sed -i.bak -E \
-#    "s/SA_PASSWORD=.*/SA_PASSWORD=${SQL_PASSWORD}/; s/1433:1433/${SQL_PORT}:${SQL_PORT}/"
+#    "s/SA_PASSWORD=.*/SA_PASSWORD=${FREETDSKIT_SQL_PASSWORD}/; s/1433:1433/${FREETDSKIT_SQL_PORT}:${FREETDSKIT_SQL_PORT}/"
 
 # Start Docker services
 if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
@@ -48,10 +55,11 @@ if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
     
     # Poll for SQL Server to be ready
     echo "Waiting for SQL Server to be ready..."
+    echo "testing with: sqlcmd -S $FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT -U $FREETDSKIT_SQL_USER -P $FREETDSKIT_SQL_PASSWORD"
     SQL_SERVER_READY=false
     for _ in {1..30}; do  # Check for up to 30 seconds
-        if /opt/homebrew/bin/sqlcmd -S localhost,$SQL_PORT -U "$SQL_USER" -P "$SQL_PASSWORD" -Q "SELECT 1" &>/dev/null; then
-            echo "✅ SQL Server is ready"
+if /opt/homebrew/bin/sqlcmd -S $FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT -U "$FREETDSKIT_SQL_USER" -P "$FREETDSKIT_SQL_PASSWORD" -Q "SELECT 1" &>/dev/null; then
+            echo "✅ SQL Server is ready on $FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT"
             SQL_SERVER_READY=true
             break
         fi
@@ -68,12 +76,12 @@ else
     exit 1
 fi
 
-echo "Checking for  db..."
-if /opt/homebrew/bin/sqlcmd -S localhost,$SQL_PORT -U "$SQL_USER" -P "$SQL_PASSWORD" -Q "SELECT name FROM sys.databases WHERE name = '${SQL_DB}'" -h -1 | grep -q GeoLens; then
-    echo "✅ Database '${SQL_DB}' already exists. Skipping setup."
+echo "Checking for  db... with "
+if /opt/homebrew/bin/sqlcmd -S $FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT -U "$FREETDSKIT_SQL_USER" -P "$FREETDSKIT_SQL_PASSWORD" -Q "SELECT name FROM sys.databases WHERE name = '${FREETDSKIT_SQL_DB}'" -h -1 | grep -q "${FREETDSKIT_SQL_DB}"; then
+    echo "✅ Database '${FREETDSKIT_SQL_DB}' already exists. Skipping setup."
 else
-    echo "‼️ Database '${SQL_DB}' does not exist. Running db-setup.sql to create and populate the database..."
-    /opt/homebrew/bin/sqlcmd -S localhost,$SQL_PORT -U "$SQL_USER" -P "$SQL_PASSWORD" -i "$SCRIPT_DIR/db-setup.sql"
+    echo "‼️ Database '${FREETDSKIT_SQL_DB}' does not exist. Running db-setup.sql to create and populate the database..."
+    /opt/homebrew/bin/sqlcmd -S $FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT -U "$FREETDSKIT_SQL_USER" -P "$FREETDSKIT_SQL_PASSWORD" -i "$SCRIPT_DIR/db-setup.sql"
         echo "✅ Database and tables created"
 fi
 # Run the tests
