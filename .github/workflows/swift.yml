@@ -22,9 +22,9 @@ jobs:
         brew update --quiet
         brew install freetds
         
-    - uses: swift-actions/setup-swift@v1
-      with:
-        swift-version: "6.0"
+    - uses: swift-actions/setup-swift@v2
+    - name: Get swift version
+      run: swift --version
     
     - name: Build
       run: swift build -v
