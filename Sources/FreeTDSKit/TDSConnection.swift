@@ -7,7 +7,6 @@
 
 import Foundation
 import CFreeTDS
-import Logging
 
 public class TDSConnection {
     private var connection: OpaquePointer?
@@ -51,37 +50,46 @@ public class TDSConnection {
         }
 
         var results: [[String: SQLDataType]] = []
-        let columnNames: [String] = []
-
-        for i in 0..<Int(rowCount) {
-            let row = cRows[i]
-            var rowDict: [String: SQLDataType] = [:]
-            
-            for j in 0..<Int(row.columnCount) {
-                if let colName = row.columnNames?[j], let colValue = row.columnValues?[j] {
-                    let columnName = String(cString: colName)
-                   // print("Processing column: \(j):\(columnName)")
-
-                    if let columnType = row.columnTypes?[j] {
-                        let sqlType = determineSQLType(colValue, columnType: Int(columnType))
-                        rowDict[columnName] = sqlType
-                    } else {
-                        print("Warning: columnType is nil for row \(i), column \(j)")
-                        rowDict[columnName] = .null
-                    }
-                } else {
-                    print("Error: Nil found for columnNames or columnValues at row \(i), column \(j)")
+        var columnNames: [String] = []
+        
+        // Get column names from the first row, even if there's no data
+        if rowCount > 0 {
+            let firstRow = cRows[0]
+            for j in 0..<Int(firstRow.columnCount) {
+                if let colName = firstRow.columnNames?[j] {
+                    columnNames.append(String(cString: colName))
                 }
             }
-            results.append(rowDict)
         }
+
+        // If we have actual data rows (more than just the column names row)
+        for i in 0..<Int(rowCount) {
+               let row = cRows[i]
+               var rowDict: [String: SQLDataType] = [:]
+               
+               for j in 0..<Int(row.columnCount) {
+                   if let colName = row.columnNames?[j], let colValue = row.columnValues?[j] {
+                       let columnName = String(cString: colName)
+                       if let columnType = row.columnTypes?[j] {
+                           let sqlType = determineSQLType(colValue, columnType: Int(columnType))
+                           rowDict[columnName] = sqlType
+                       } else {
+                           print("Warning: columnType is nil for row \(i), column \(j)")
+                           rowDict[columnName] = .null
+                       }
+                   } else {
+                       print("Error: Nil found for columnNames or columnValues at row \(i), column \(j)")
+                   }
+               }
+               results.append(rowDict)
+           }
 
         let affectedRows = Int(dbcount(connection))
         freeFetchedResults(cRows, rowCount)
 
         return SQLResult(columns: columnNames, rows: results, affectedRows: affectedRows)
     }
-
+    
     public func disconnect() {
         if let connection = connection {
             closeConnection(connection)

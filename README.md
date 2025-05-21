@@ -1,12 +1,12 @@
 # FreeTDSKit
 
-FreeTDSKit is a Swift wrapper for the FreeTDS library, enabling seamless connections to Microsoft SQL Server databases from Swift applications.
+FreeTDSKit is a Swift-native wrapper around the FreeTDS C library, providing a Swift-friendly API using only Swift types (no C) to natively connect to Microsoft SQL Server and Sybase databases and execute queries.
 
 ## Features
 
-- Establish connections to Microsoft SQL Server and Sybase databases using Swift syntax.
-- Execute SQL queries and process results within Swift applications.
-- Utilize the robust capabilities of the FreeTDS library through a Swift-friendly interface.
+- Provide a Swift-friendly API using only Swift types (no C) for connecting to Microsoft SQL Server and Sybase databases.
+- Execute SQL queries and process results with native Swift types.
+- Leverage the capabilities of the FreeTDS library transparently under the hood.
 
 > As of now, FreeTDSKit requires `freetds` installation via Homebrew.
 
@@ -18,7 +18,7 @@ brew install freetds
 
 By default FreeTDS does not include a package config file (freetds.pc), therefore Xcode cannot find the sysbdb.h librarying using <> for system headers, which is more convenient than hardcoding the path using quotes.
 
-Running the included `support/generate_freetds_pc.sh` file will locate the installed FreeTDS version and generate a .PC file in the install /lib/pkgconfig directly, then create a symbolic link here `/opt/homebrew/lib/pkgconfig/`.
+Running the included `support/generate_freetds_pc.sh` file will locate the installed FreeTDS version and generate a .PC file in the install /lib/pkgconfig directly, then create a symbolic link here `/opt/homebrew/lib/pkgconfig/` to the .PC file.
 
 ```
 chmod +x generate_freetds_pc.sh

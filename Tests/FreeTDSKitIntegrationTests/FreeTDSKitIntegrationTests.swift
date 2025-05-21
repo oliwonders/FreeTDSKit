@@ -14,8 +14,8 @@ struct TestHelpers {
 }
 
 @Suite(
-    "FreeTDS Integration Tests",
-    .disabled(if: !TestHelpers.isRunningIntegrationTests))
+    "FreeTDS Integration Tests")
+//.disabled(if: !TestHelpers.isRunningIntegrationTests))
 final class FreeTDSKitIntegrationTests {
 
     var server: String
@@ -26,36 +26,45 @@ final class FreeTDSKitIntegrationTests {
     let testTable: String = "DataTypeTest"
 
     init() async throws {
-        guard let serverEnv = ProcessInfo.processInfo.environment["FREETDSKIT_SQL_SERVER"], !serverEnv.isEmpty
-        else {
-            throw EnvironmentVariableError(variableName: "FREETDSKIT_SQL_SERVER")
-        }
-        guard
-            let userEnv = ProcessInfo.processInfo.environment[
-                "FREETDSKIT_SQL_USER"], !userEnv.isEmpty
-        else {
-            throw EnvironmentVariableError(variableName: "FREETDSKIT_SQL_USER")
-        }
-        guard
-            let passwordEnv = ProcessInfo.processInfo.environment[
-                "FREETDSKIT_SQL_PASSWORD"], !passwordEnv.isEmpty
-        else {
-            throw EnvironmentVariableError(
-                variableName: "FREETDSKIT_SQL_PASSWORD")
-        }
-        guard
-            let portEnv = ProcessInfo.processInfo.environment[
-                "FREETDSKIT_SQL_PORT"], !portEnv.isEmpty
-        else {
-            throw EnvironmentVariableError(variableName: "FREETDSKIT_SQL_PORT")
-        }
+        //TODO: remove after testing
+        self.server = "localhost"
+        self.username = "sa"
+        self.password = "YourStrongPassword1"
+        self.port = "1438"
+        //
+        //        guard
+        //            let serverEnv = ProcessInfo.processInfo.environment[
+        //                "FREETDSKIT_SQL_SERVER"], !serverEnv.isEmpty
+        //        else {
+        //            throw EnvironmentVariableError(
+        //                variableName: "FREETDSKIT_SQL_SERVER")
+        //        }
+        //        guard
+        //            let userEnv = ProcessInfo.processInfo.environment[
+        //                "FREETDSKIT_SQL_USER"], !userEnv.isEmpty
+        //        else {
+        //            throw EnvironmentVariableError(variableName: "FREETDSKIT_SQL_USER")
+        //        }
+        //        guard
+        //            let passwordEnv = ProcessInfo.processInfo.environment[
+        //                "FREETDSKIT_SQL_PASSWORD"], !passwordEnv.isEmpty
+        //        else {
+        //            throw EnvironmentVariableError(
+        //                variableName: "FREETDSKIT_SQL_PASSWORD")
+        //        }
+        //        guard
+        //            let portEnv = ProcessInfo.processInfo.environment[
+        //                "FREETDSKIT_SQL_PORT"], !portEnv.isEmpty
+        //        else {
+        //            throw EnvironmentVariableError(variableName: "FREETDSKIT_SQL_PORT")
+        //        }
+        //
+        //        // Set the properties if all validations pass
+        //        self.server = serverEnv
+        //        self.username = userEnv
+        //        self.password = passwordEnv
+        //        self.port = portEnv
 
-        // Set the properties if all validations pass
-        self.server = serverEnv
-        self.username = userEnv
-        self.password = passwordEnv
-        self.port = portEnv
-        
     }
 
     deinit {
@@ -97,7 +106,7 @@ final class FreeTDSKitIntegrationTests {
             result.affectedRows > 0, "\(testTable) table should not be empty")
         dbConnection.disconnect()
     }
-    
+
     @Test("Test Id Column")
     func testId() async throws {
         let dbConnection = try TDSConnection(
@@ -110,22 +119,45 @@ final class FreeTDSKitIntegrationTests {
 
         let result = try dbConnection.execute(
             query: "SELECT Id FROM \(testTable)")
+
         #expect(result != nil, "Query should return results")
-        result.rows.forEach { row in
-            #expect(row["Id"] != nil)
-            print("Int: \(try row["int"]!.smallInt!)")
-            #expect(try row["Id"]!.smallInt! > 0)
+        #expect(result.columns.count == 1, "Column Count Should be 1")
+        #expect(result[0, "Id"]?.int == 1, "row 1 id should be 1")
+    }
+
+    @Test("Test Columns")
+    func testColumns() async throws {
+        let dbConnection = try TDSConnection(
+            server: "\(server):\(port)",
+            username: username,
+            password: password,
+            database: database
+        )
+        try #require(dbConnection != nil)
+
+        let result = try dbConnection.execute(
+            query: "SELECT * FROM \(testTable)")
+        #expect(
+            result.columns.count > 0, "More than one column should be returned")
+        // Print the list of column names
+        print("Columns:")
+        for (index, column) in result.columns.enumerated() {
+            print("Column \(index): \(column)")
         }
-    
+
+        // Print each row and its values for every column
+        print("\nRows:")
+        for (rowIndex, row) in result.rows.enumerated() {
+            print("Row \(rowIndex):")
+            for column in result.columns {
+                // Attempt to get the value for this column from the row; prints 'nil' if missing.
+                let value = row[column] ?? .null
+                print("  \(column): \(value)")
+            }
+        }
+
     }
 }
-
-// Extension to add setup to test suite
-//extension FreeTDSKitIntegrationTests {
-//    static func setUp() async throws {
-//        try await FreeTDSKitIntegrationTestBase.setUp()
-//    }
-//}
 
 struct EnvironmentVariableError: Error, CustomStringConvertible {
     let variableName: String

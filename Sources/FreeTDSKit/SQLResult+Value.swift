@@ -1,8 +1,10 @@
+import Foundation
+
 extension SQLResult {
     public struct Value: CustomStringConvertible, CustomDebugStringConvertible {
         public let column: String
         public let value: SQLDataType?
-
+        
         public var description: String {
             guard let value = value else { return "null" }
             switch value {
@@ -40,20 +42,52 @@ extension SQLResult {
                 return "null"
             }
         }
-
+        
         public var debugDescription: String { description }
-
-        // Convenient typed accessors
-        public var int: Int? {
-            if case .integer(let value) = value { return value }
+        
+        public var uuid: UUID? {
+            if case .uniqueidentifier(let value) = value { return value }
             return nil
         }
-
+        
+        public var bool: Bool? {
+            if case .bit(let value) = value { return value }
+            return nil
+        }
+      
         public var smallInt: Int16? {
             if case .smallInt(let value) = value { return value }
             return nil
         }
-
+        
+        public var int: Int? {
+            if case .integer(let value) = value { return value }
+            return nil
+        }
+        
+        public var bigInt: Int64? {
+            if case .bigInt(let value) = value { return value }
+            return nil
+        }
+        
+        public var tinyInt: UInt8? {
+            if case .tinyInt(let value) = value { return value }
+            return nil
+        }
+        
+        public var float: Float? {
+            if case .float(let value) = value { return value }
+            if case .real(let value) = value { return value }
+            return nil
+        }
+        
+        public var decimal: Decimal? {
+            if case .numeric(let value) = value { return value }
+            if case .decimal(let value) = value { return value }
+            if case .money(let value) = value { return value }
+            return nil
+        }
+        
         public var string: String? {
             if case .char(let value) = value { return value }
             if case .varchar(let value) = value { return value }
@@ -62,7 +96,38 @@ extension SQLResult {
             return nil
         }
         
-        // Add more computed properties for other SQLDataTypes as needed.
+        public var time: TDSTime? {
+            if case .time(let value) = value { return value }
+            return nil
+        }
+        
+        public var date: TDSDate? {
+            if case .date(let value) = value { return value }
+            return nil
+        }
+        
+        public var dateTime: TDSDateTime? {
+            if case .smalldatetime(let value) = value { return value }
+            if case .datetime(let value) = value { return value }
+            if case .datetime2(let value) = value { return value }
+            return nil
+        }
+        
+        public var dateTimeOffset: TDSDateTimeOffset? {
+            if case .datetimeoffset(let value) = value { return value }
+            return nil
+        }
+        
+        public var binary: Data? {
+            if case .binary(let value) = value { return value }
+            if case .varbinary(let value) = value { return value }
+            return nil
+        }
+    
+        public var spatial: String? {
+            if case .spatial (let value) = value { return value.value }
+            return nil
+        }
     }
 
     // Enable subscript for direct access

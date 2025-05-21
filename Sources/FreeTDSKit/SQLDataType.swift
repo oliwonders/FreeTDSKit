@@ -20,9 +20,9 @@ public enum SQLDataType {
     case real(Float)
     case date(TDSDate)
     case time(TDSTime)
-    case datetime(TDSTimestamp)
-    case smalldatetime(TDSTimestamp)
-    case datetime2(TDSTimestamp)
+    case datetime(TDSDateTime)
+    case smalldatetime(TDSDateTime)
+    case datetime2(TDSDateTime)
     case datetimeoffset(TDSDateTimeOffset)
     case bit(Bool)
     case binary(Data)
@@ -30,7 +30,7 @@ public enum SQLDataType {
     case spatial(WKTString)
     case null
 
-    public struct WKTString {
+    public struct WKTString: Equatable {
         let value: String
     }
 }
@@ -69,7 +69,7 @@ public struct TDSDate: Equatable, Codable, CustomDebugStringConvertible {
     }
 }
 
-public struct TDSTimestamp: Equatable, Codable, CustomDebugStringConvertible {
+public struct TDSDateTime: Equatable, Codable, CustomDebugStringConvertible {
     public var date: TDSDate
     public var hour: Int
     public var minute: Int
@@ -121,6 +121,7 @@ public let SYBGEOMETRY: Int = 241  // Actual value from SQL Server
 func determineSQLType(_ colValue: UnsafePointer<CChar>, columnType: Int)
     -> SQLDataType
 {
+    
     switch columnType {
     case 36: // uniqueidentifier
         if let uuid = UUID(uuidString: String(cString: colValue)) {
@@ -158,7 +159,7 @@ func determineSQLType(_ colValue: UnsafePointer<CChar>, columnType: Int)
                     let date = TDSDate(
                         day: dateParts[2], month: dateParts[1],
                         year: dateParts[0])
-                    let timestamp = TDSTimestamp(
+                    let timestamp = TDSDateTime(
                         date: date,
                         hour: timeParts[0],
                         minute: timeParts[1],
@@ -217,7 +218,7 @@ func determineSQLType(_ colValue: UnsafePointer<CChar>, columnType: Int)
             {
                 let date = TDSDate(
                     day: dateParts[2], month: dateParts[1], year: dateParts[0])
-                let timestamp = TDSTimestamp(
+                let timestamp = TDSDateTime(
                     date: date,
                     hour: timeParts[0],
                     minute: timeParts[1],
@@ -240,7 +241,7 @@ func determineSQLType(_ colValue: UnsafePointer<CChar>, columnType: Int)
             {
                 let date = TDSDate(
                     day: dateParts[2], month: dateParts[1], year: dateParts[0])
-                let timestamp = TDSTimestamp(
+                let timestamp = TDSDateTime(
                     date: date,
                     hour: timeParts[0],
                     minute: timeParts[1],
@@ -250,8 +251,8 @@ func determineSQLType(_ colValue: UnsafePointer<CChar>, columnType: Int)
             }
         }
     case SYBFLT8: // sql server type 62
-        if let value = Int64(String(cString: colValue)) {
-            return .bigInt(value)
+        if let value = Float(String(cString: colValue)) {
+            return .float(value)
         }
     case SYBINT8: //sql server type 127
         if let value = Int64(String(cString: colValue)) {
@@ -273,10 +274,14 @@ func determineSQLType(_ colValue: UnsafePointer<CChar>, columnType: Int)
         let dataLength = strlen(colValue)
         let data = Data(bytes: colValue, count: Int(dataLength))
         return .binary(data)
-    case SYBBIT: //sql server type 104
-        if let value = Int(String(cString: colValue)) {
-            return .bit(value != 0)
+    case SYBBIT:
+        let valueStr = String(cString: colValue).lowercased()
+        if valueStr == "1" || valueStr == "true" {
+            return .bit(true)
+        } else if valueStr == "0" || valueStr == "false" {
+            return .bit(false)
         }
+        return .null
     case 60: //money
         if let value = Decimal(string: String(cString: colValue)) {
             return .money(value)
