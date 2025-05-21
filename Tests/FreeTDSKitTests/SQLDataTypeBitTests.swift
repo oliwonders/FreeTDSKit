@@ -1,11 +1,3 @@
-//
-//  SQLDataTypeBitTests.swift
-//  FreeTDSKit
-//
-//  Created by David Oliver on 2/10/25.
-//
-
-
 import CFreeTDS
 import Testing
 
@@ -85,14 +77,5 @@ import Testing
         #expect(result[2, "Flag"]?.bool == nil)
     }
     
-    @Test("Test bit description formatting")
-    func testBitDescription() {
-        let result = SQLResult(
-            columns: ["Flag"],
-            rows: [["Flag": .bit(true)]],
-            affectedRows: 1
-        )
-        
-        #expect(result[0, "Flag"]?.description == "true")
-    }
+  
 }

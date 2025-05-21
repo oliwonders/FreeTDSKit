@@ -53,10 +53,10 @@ import XCTest
     func float() {
         let cString: [CChar] = "3.14159".cString(using: .utf8)!
         let sqlType = determineSQLType(cString, columnType: SYBFLT8)
-        if case let .float(value) = sqlType {
+        if case let .double(value) = sqlType {
             #expect(abs(value - 3.14159) < 0.00001)
         } else {
-            Issue.record("Expected SQLDataType.float")
+            Issue.record("Expected SQLDataType.double")
         }
     }
 
