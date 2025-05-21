@@ -64,25 +64,37 @@ public class TDSConnection {
 
         // If we have actual data rows (more than just the column names row)
         for i in 0..<Int(rowCount) {
-               let row = cRows[i]
-               var rowDict: [String: SQLDataType] = [:]
-               
-               for j in 0..<Int(row.columnCount) {
-                   if let colName = row.columnNames?[j], let colValue = row.columnValues?[j] {
-                       let columnName = String(cString: colName)
-                       if let columnType = row.columnTypes?[j] {
-                           let sqlType = determineSQLType(colValue, columnType: Int(columnType))
-                           rowDict[columnName] = sqlType
-                       } else {
-                           print("Warning: columnType is nil for row \(i), column \(j)")
-                           rowDict[columnName] = .null
-                       }
-                   } else {
-                       print("Error: Nil found for columnNames or columnValues at row \(i), column \(j)")
-                   }
-               }
-               results.append(rowDict)
-           }
+    var dict: [String: SQLDataType] = [:]
+    let row = cRows[i]
+
+    for j in 0..<row.columnCount {
+        guard
+            let namePtr = row.columnNames?[j],
+            let valPtr  = row.columnValues?[j]
+        else { continue }
+
+        let key   = String(cString: namePtr)
+        let value = SQLDataType.determineSQLType(
+                      colType: row.columnTypes?[j] ?? 0,
+                      colValue: valPtr,
+                      row: row,
+                      columnIdx: j)
+        dict[key] = value
+    }
+
+    if result.columns.isEmpty {
+        var ordered: [String] = []
+        for j in 0..<row.columnCount {
+            if let cName = row.columnNames?[j] {
+                ordered.append(String(cString: cName))
+            }
+        }
+        result.columns = ordered
+    }
+
+    rows.append(dict)
+}
+
 
         let affectedRows = Int(dbcount(connection))
         freeFetchedResults(cRows, rowCount)
