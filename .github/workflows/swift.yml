@@ -16,7 +16,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+ 
+    - name: Install FreeTDS (headers & pkg-config file)
+      run: |
+        brew update --quiet
+        brew install freetds
+        
+    - uses: swift-actions/setup-swift@v1
+      with:
+        swift-version: "6.0"
+    
     - name: Build
       run: swift build -v
     - name: Run tests
-      run: swift test -v
+      run: swift test --parallel
