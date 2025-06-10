@@ -28,20 +28,20 @@ check_brew_package() {
 
 # Check for required packages
 check_brew_package "docker"
-check_brew_package "mssql-tools"
+check_brew_package "sqlcmd"
 
 # Check if Docker is running
 if ! docker info &>/dev/null; then
-    echo "❌ Docker is not running. Starting Docker..."
+    echo "❌ docker is not running. Starting Docker..."
     open -a Docker
     
     # Wait for Docker to start
-    echo "🐳 Waiting for Docker to start..."
+    echo "🐳 waiting for Docker to start..."
     while ! docker info &>/dev/null; do
         sleep 1
     done
 else
-    echo "✅ Docker is running"
+    echo "✅ docker is running"
 fi
 
 #sed -i.bak -E \
@@ -49,12 +49,12 @@ fi
 
 # Start Docker services
 if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
-    echo "🐳 Starting Docker services..."
+    echo "🐳 starting Docker services..."
     cd "$SCRIPT_DIR"  # Change to the directory containing docker-compose.yml
     docker compose up -d
     
     # Poll for SQL Server to be ready
-    echo "Waiting for SQL Server to be ready..."
+    echo "waiting for SQL Server to be ready..."
     echo "testing with: sqlcmd -S $FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT -U $FREETDSKIT_SQL_USER -P $FREETDSKIT_SQL_PASSWORD"
     SQL_SERVER_READY=false
     for _ in {1..30}; do  # Check for up to 30 seconds

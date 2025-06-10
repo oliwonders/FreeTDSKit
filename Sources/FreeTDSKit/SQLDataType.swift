@@ -35,6 +35,14 @@ public enum SQLDataType {
     }
 }
 
+extension SQLDataType: Sendable {}
+extension SQLDataType.WKTString: Sendable {}
+
+extension TDSDate: Sendable {}
+extension TDSTime: Sendable {}
+extension TDSDateTime: Sendable {}
+extension TDSDateTimeOffset: Sendable {}
+
 public struct TDSTime: Equatable, Codable, CustomDebugStringConvertible {
     public var hour: Int
     public var minute: Int
@@ -467,5 +475,48 @@ public extension SQLDataType {
     var spatial: String? {
         if case .spatial(let wkt) = self { return wkt.value }
         return nil
+    }
+}
+
+// MARK: - JSON Conversion for Decodable integration
+extension SQLDataType {
+    /// Convert SQLDataType into a JSON-friendly Foundation type for decoding.
+    var jsonValue: Any {
+        switch self {
+        case .uniqueidentifier(let uuid):
+            return uuid.uuidString
+        case .char(let s), .varchar(let s), .nchar(let s), .nvarchar(let s), .text(let s):
+            return s
+        case .integer(let i):
+            return i
+        case .smallInt(let s):
+            return Int(s)
+        case .bigInt(let b):
+            return Int(b)
+        case .tinyInt(let t):
+            return Int(t)
+        case .bit(let b):
+            return b
+        case .float(let f), .real(let f):
+            return f
+        case .double(let d):
+            return d
+        case .decimal(let dec), .numeric(let dec), .money(let dec):
+            return dec as NSDecimalNumber
+        case .date(let d):
+            return "\(d.year)-\(d.month)-\(d.day)"
+        case .time(let t):
+            return "\(t.hour):\(t.minute):\(t.second)"
+        case .datetime(let dt), .datetime2(let dt), .smalldatetime(let dt):
+            return "\(dt.date.year)-\(dt.date.month)-\(dt.date.day)T\(dt.hour):\(dt.minute):\(dt.second)"
+        case .datetimeoffset(let dto):
+            return "\(dto.date.year)-\(dto.date.month)-\(dto.date.day)T\(dto.time.hour):\(dto.time.minute):\(dto.time.second)+\(dto.offset)"
+        case .binary(let data), .varbinary(let data):
+            return data.base64EncodedString()
+        case .spatial(let wkt):
+            return wkt.value
+        case .null:
+            return NSNull()
+        }
     }
 }

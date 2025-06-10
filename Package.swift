@@ -39,9 +39,11 @@ let package = Package(
             name: "FreeTDSKitTests",
             dependencies: ["FreeTDSKit"]
         ),
+        // Integration tests (requires Docker and a live SQL Server instance)
         .testTarget(
             name: "FreeTDSKitIntegrationTests",
             dependencies: ["FreeTDSKit"],
-            resources: [.copy("db-setup.sql"), .copy("docker-compose.yml"),.copy("run-integration-tests.sh")])
+            resources: [.copy("db-setup.sql"), .copy("docker-compose.yml"), .copy("run-integration-tests.sh")]
+        ),
     ]
 )

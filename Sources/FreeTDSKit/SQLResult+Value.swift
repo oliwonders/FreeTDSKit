@@ -51,6 +51,9 @@ extension SQLResult {
 
         public var debugDescription: String { description }
     }
+
 }
+
+extension SQLResult.Value: Sendable {}
 
 

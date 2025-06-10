@@ -64,3 +64,4 @@ extension SQLResult: Sequence {
         rows.makeIterator()
     }
 }
+extension SQLResult: Sendable {}

@@ -61,112 +61,76 @@ int executeQuery(DBPROCESS* dbproc, const char* query) {
 // Function to fetch results and return an array of RowData
 RowData* fetchResultsWithType(DBPROCESS* dbproc, int* rowCount) {
     int result_code;
-    int rows_allocated = 10;
+    int rows_allocated = 0;
     int current_row = 0;
-    RowData* rows = malloc(rows_allocated * sizeof(RowData));
-    
-    if (rows == NULL) {
-        *rowCount = 0;
-        return NULL;
-    }
+    RowData* rows = NULL;
 
     while ((result_code = dbresults(dbproc)) != NO_MORE_RESULTS) {
-        if (result_code == SUCCEED) {
-            int ncols = dbnumcols(dbproc);
-            
-            // Initialize first row to store column names even if there are no data rows
-            rows[0].columnCount = ncols;
-            rows[0].columnNames = malloc(ncols * sizeof(char*));
-            rows[0].columnValues = malloc(ncols * sizeof(char*));
-            rows[0].columnTypes = malloc(ncols * sizeof(int));
-            
-            if (!rows[0].columnNames || !rows[0].columnValues || !rows[0].columnTypes) {
-                freeFetchedResults(rows, 0);
+        if (result_code != SUCCEED) continue;
+        int ncols = dbnumcols(dbproc);
+        
+        while (dbnextrow(dbproc) != NO_MORE_ROWS) {
+            // Expand the rows array as needed
+            if (current_row >= rows_allocated) {
+                int new_alloc = rows_allocated == 0 ? 4 : rows_allocated * 2;
+                RowData* temp = realloc(rows, new_alloc * sizeof(RowData));
+                if (temp == NULL) {
+                    freeFetchedResults(rows, current_row);
+                    *rowCount = 0;
+                    return NULL;
+                }
+                rows = temp;
+                rows_allocated = new_alloc;
+            }
+
+            // Populate this row
+            rows[current_row].columnCount = ncols;
+            rows[current_row].columnNames = malloc(ncols * sizeof(char*));
+            rows[current_row].columnValues = malloc(ncols * sizeof(char*));
+            rows[current_row].columnTypes = malloc(ncols * sizeof(int));
+            if (!rows[current_row].columnNames || !rows[current_row].columnValues || !rows[current_row].columnTypes) {
+                freeFetchedResults(rows, current_row);
                 *rowCount = 0;
                 return NULL;
             }
-            
-            // Get column names and types before processing rows
+
             for (int i = 1; i <= ncols; i++) {
                 const char* colName = dbcolname(dbproc, i);
                 int colType = dbcoltype(dbproc, i);
-                
-                rows[0].columnNames[i - 1] = strdup(colName ? colName : "");
-                rows[0].columnTypes[i - 1] = colType;
-                rows[0].columnValues[i - 1] = strdup(""); // Initialize with empty string
-            }
+                rows[current_row].columnNames[i - 1] = strdup(colName ? colName : "");
+                rows[current_row].columnTypes[i - 1] = colType;
 
-            while (dbnextrow(dbproc) != NO_MORE_ROWS) {
-                if (current_row >= rows_allocated) {
-                    rows_allocated *= 2;
-                    RowData* temp = realloc(rows, rows_allocated * sizeof(RowData));
-                    if (temp == NULL) {
-                        freeFetchedResults(rows, current_row);
-                        *rowCount = 0;
-                        return NULL;
-                    }
-                    rows = temp;
-                }
-
-                if (current_row > 0) { // Skip first row as it's already initialized
-                    rows[current_row].columnCount = ncols;
-                    rows[current_row].columnNames = malloc(ncols * sizeof(char*));
-                    rows[current_row].columnValues = malloc(ncols * sizeof(char*));
-                    rows[current_row].columnTypes = malloc(ncols * sizeof(int));
-
-                    if (!rows[current_row].columnNames || !rows[current_row].columnValues || !rows[current_row].columnTypes) {
-                        freeFetchedResults(rows, current_row);
-                        *rowCount = 0;
-                        return NULL;
-                    }
-
-                    for (int i = 1; i <= ncols; i++) {
-                        rows[current_row].columnNames[i - 1] = strdup(rows[0].columnNames[i - 1]);
-                        rows[current_row].columnTypes[i - 1] = rows[0].columnTypes[i - 1];
-                        
-                        BYTE* data = dbdata(dbproc, i);
-                        int dataLength = dbdatlen(dbproc, i);
-                        int colType = rows[0].columnTypes[i - 1];
-
-                        if (data && dataLength > 0) {
-                            char* value = malloc(dataLength + 1);
-                            if (value) {
-                                memcpy(value, data, dataLength);
-                                value[dataLength] = '\0';
-
-                                switch (colType) {
-                                    case SYBINT1:
-                                    case SYBINT2:
-                                    case SYBINT4:
-                                        snprintf(value, dataLength + 1, "%d", *(int*)data);
-                                        break;
-                                    case SYBFLT8:
-                                    case SYBREAL:
-                                        snprintf(value, dataLength + 1, "%f", *(double*)data);
-                                        break;
-                                    case SYBDATETIME:
-                                        snprintf(value, dataLength + 1, "DateTime Data");
-                                        break;
-                                    default:
-                                        // Leave value as is
-                                        break;
-                                }
-                                rows[current_row].columnValues[i - 1] = value;
-                            }
-                        } else {
-                            rows[current_row].columnValues[i - 1] = strdup("");
+                BYTE* data = dbdata(dbproc, i);
+                int dataLength = dbdatlen(dbproc, i);
+                char* value;
+                if (data && dataLength > 0) {
+                    value = malloc(dataLength + 1);
+                    if (value) {
+                        memcpy(value, data, dataLength);
+                        value[dataLength] = '\0';
+                        switch (colType) {
+                            case SYBINT1:
+                            case SYBINT2:
+                            case SYBINT4:
+                                snprintf(value, dataLength + 1, "%d", *(int*)data);
+                                break;
+                            case SYBFLT8:
+                            case SYBREAL:
+                                snprintf(value, dataLength + 1, "%f", *(double*)data);
+                                break;
+                            default:
+                                break;
                         }
                     }
+                } else {
+                    value = strdup("");
                 }
-                current_row++;
+                rows[current_row].columnValues[i - 1] = value;
             }
-            
-            // If no rows were found, ensure we return the structure with column names
-            if (current_row == 0) {
-                current_row = 1;
-            }
+            current_row++;
         }
     }
+
     *rowCount = current_row;
     return rows;
 }
