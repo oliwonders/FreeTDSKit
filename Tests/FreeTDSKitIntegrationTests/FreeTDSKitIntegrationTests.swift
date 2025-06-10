@@ -131,7 +131,7 @@ final class FreeTDSKitIntegrationTests: XCTestCase {
             database: database
         )
         let result = try await dbConnection.execute(
-            query: "SELECT SpatialColumn FROM \(testTable) ORDER BY Id"
+            query: "SELECT SpatialColumn.STAsText() AS SpatialColumn FROM \(testTable) ORDER BY Id"
         )
         XCTAssertEqual(
             result.rows.count, 2,
@@ -166,9 +166,9 @@ final class FreeTDSKitIntegrationTests: XCTestCase {
             database: database
         )
         var values: [String] = []
-        for try await row in dbConnection.streamRows(
-            query: "SELECT SpatialColumn FROM \(testTable) ORDER BY Id"
-        ) {
+    for try await row in dbConnection.streamRows(
+        query: "SELECT SpatialColumn.STAsText() AS SpatialColumn FROM \(testTable) ORDER BY Id"
+    ) {
             if case .spatial(let wkt) = row["SpatialColumn"] {
                 values.append(wkt.value)
             }
@@ -192,10 +192,10 @@ final class FreeTDSKitIntegrationTests: XCTestCase {
             database: database
         )
         var rows: [SpatialRow] = []
-        for try await row in dbConnection.rows(
-            query: "SELECT SpatialColumn FROM \(testTable) ORDER BY Id",
-            as: SpatialRow.self
-        ) {
+    for try await row in dbConnection.rows(
+        query: "SELECT SpatialColumn.STAsText() AS SpatialColumn FROM \(testTable) ORDER BY Id",
+        as: SpatialRow.self
+    ) {
             rows.append(row)
         }
         let expected = [
