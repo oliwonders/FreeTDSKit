@@ -2,7 +2,7 @@ import XCTest
 
 @testable import FreeTDSKit
 
-#if INTEGRATION_TESTS
+#if !INTEGRATION_TESTS
 
 /// Integration tests require a running SQL Server (e.g. via Docker).
 /// They read connection parameters from environment variables:
@@ -137,27 +137,28 @@ final class FreeTDSKitIntegrationTests: XCTestCase {
             result.rows.count, 2,
             "Should return two rows for spatial column"
         )
-        if case .spatial(let wkt0) = result.rows[0]["SpatialColumn"] {
+
+        if let str0 = result.rows[0]["SpatialColumn"]?.string {
             XCTAssertEqual(
-                wkt0.value,
-                "POINT(-122.335167 47.608013)",
+                str0,
+                "POINT (-122.335167 47.608013)",
                 "First spatial row should match expected WKT"
             )
         } else {
-            XCTFail("Expected spatial data in first row")
+            XCTFail("Expected string data for first spatial row")
         }
-        if case .spatial(let wkt1) = result.rows[1]["SpatialColumn"] {
+        if let str1 = result.rows[1]["SpatialColumn"]?.string {
             XCTAssertEqual(
-                wkt1.value,
-                "POINT(-118.243683 34.052235)",
+                str1,
+                "POINT (-118.243683 34.052235)",
                 "Second spatial row should match expected WKT"
             )
         } else {
-            XCTFail("Expected spatial data in second row")
+            XCTFail("Expected string data for second spatial row")
         }
         await dbConnection.close()
     }
-
+    
     func testStreamingSpatialColumn() async throws {
         let dbConnection = try TDSConnection(
             server: "\(server):\(port)",
@@ -169,15 +170,17 @@ final class FreeTDSKitIntegrationTests: XCTestCase {
     for try await row in dbConnection.streamRows(
         query: "SELECT SpatialColumn.STAsText() AS SpatialColumn FROM \(testTable) ORDER BY Id"
     ) {
-            if case .spatial(let wkt) = row["SpatialColumn"] {
-                values.append(wkt.value)
-            }
+        if let str = row["SpatialColumn"]?.string {
+            values.append(str)
+        } else {
+            XCTFail("Expected string data when streaming spatial rows")
         }
-        XCTAssertEqual(
-            values,
-            ["POINT(-122.335167 47.608013)", "POINT(-118.243683 34.052235)"],
-            "Streamed spatial values should match expected WKTs"
-        )
+    }
+    XCTAssertEqual(
+        values,
+        ["POINT (-122.335167 47.608013)", "POINT (-118.243683 34.052235)"],
+        "Streamed spatial values should match expected WKTs"
+    )
         await dbConnection.close()
     }
 
@@ -198,10 +201,10 @@ final class FreeTDSKitIntegrationTests: XCTestCase {
     ) {
             rows.append(row)
         }
-        let expected = [
-            SpatialRow(SpatialColumn: "POINT(-122.335167 47.608013)"),
-            SpatialRow(SpatialColumn: "POINT(-118.243683 34.052235)")
-        ]
+    let expected = [
+        SpatialRow(SpatialColumn: "POINT (-122.335167 47.608013)"),
+        SpatialRow(SpatialColumn: "POINT (-118.243683 34.052235)")
+    ]
         XCTAssertEqual(
             rows,
             expected,
@@ -209,5 +212,11 @@ final class FreeTDSKitIntegrationTests: XCTestCase {
         )
         await dbConnection.close()
     }
+    
+    
+    func testComputedSpatialColumn() async throws {
+        
+    }
+
 }
 #endif

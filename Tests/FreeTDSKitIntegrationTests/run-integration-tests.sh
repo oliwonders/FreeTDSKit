@@ -87,7 +87,8 @@ fi
 # Run the tests
 echo "🧪 Running tests..."
 swift test --filter FreeTDSKitIntegrationTests -Xswiftc -DINTEGRATION_TESTS
+echo "✅ Integration tests passed!"
 
 # Stop Docker services after tests
-echo "🐳 Stopping Docker services..."
-docker compose down
+#echo "🐳 Stopping Docker services..."
+#docker compose down

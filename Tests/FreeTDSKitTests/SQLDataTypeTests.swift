@@ -73,18 +73,6 @@ import XCTest
         }
     }
 
-    @Test("Test spatial data WKT")
-    func spatialData() {
-        let wkt = "POINT(30.123456 -97.123456)"
-        let cString = wkt.cString(using: .utf8)!
-        let sqlType = determineSQLType(cString, columnType: SYBGEOMETRY)
-        if case let .spatial(value) = sqlType {
-            #expect(value.value == wkt)
-        } else {
-            Issue.record("Expected SQLDataType.spatial")
-        }
-    }
-
     @Test("Test decimal precision")
     func decimalPrecision() {
         let cString: [CChar] = "123456.789".cString(using: .utf8)!

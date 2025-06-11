@@ -35,7 +35,9 @@ BEGIN
         NVarCharColumn NVARCHAR(50) NOT NULL,     -- Variable-length Unicode character data
         BinaryColumn BINARY(10),                  -- Fixed-length binary data
         VarBinaryColumn VARBINARY(50),            -- Variable-length binary data
-        SpatialColumn GEOGRAPHY,                 -- Spatial data
+        SpatialColumn GEOGRAPHY NULL,                 -- Spatial data
+        ComputedSpatialColumnLat  AS ([SpatialColumn].[Lat]),
+        ComputedSpatialColumnLong  AS ([SpatialColumn].[Long]),
         UniqueIdentifierColumn [uniqueidentifier] NOT NULL -- Unique Id
     );
 END

@@ -67,4 +67,3 @@ for try await user in connection.rows(query: "SELECT id, name FROM users", as: U
 
 // Close when you're done
 await connection.close()
-```
