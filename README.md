@@ -67,3 +67,18 @@ for try await user in connection.rows(query: "SELECT id, name FROM users", as: U
 
 // Close when you're done
 await connection.close()
+
+## Integration Tests
+
+Integration tests require Docker and a live SQL Server instance. You can run the full integration test setup and run the tests with:
+
+```bash
+Tests/FreeTDSKitIntegrationTests/run-integration-tests.sh
+```
+
+Alternatively, to run integration tests directly via Swift Package Manager:
+
+```bash
+swift test --disable-swift-testing --enable-xctest \
+    --filter FreeTDSKitIntegrationTests -Xswiftc -DINTEGRATION_TESTS
+```

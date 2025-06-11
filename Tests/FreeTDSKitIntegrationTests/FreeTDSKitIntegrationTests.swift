@@ -2,7 +2,7 @@ import XCTest
 
 @testable import FreeTDSKit
 
-#if !INTEGRATION_TESTS
+#if INTEGRATION_TESTS
 
 /// Integration tests require a running SQL Server (e.g. via Docker).
 /// They read connection parameters from environment variables:
@@ -11,13 +11,7 @@ import XCTest
 ///   - FREETDSKIT_SQL_USER (default: sa)
 ///   - FREETDSKIT_SQL_PASSWORD (default: YourStrongPassword1)
 ///   - FREETDSKIT_SQL_DB (default: FreeTDSKitTestDB)
-final class FreeTDSKitIntegrationTests: XCTestCase {
-    private var server: String { ProcessInfo.processInfo.environment["FREETDSKIT_SQL_SERVER"] ?? "localhost" }
-    private var port: String { ProcessInfo.processInfo.environment["FREETDSKIT_SQL_PORT"] ?? "1438" }
-    private var username: String { ProcessInfo.processInfo.environment["FREETDSKIT_SQL_USER"] ?? "sa" }
-    private var password: String { ProcessInfo.processInfo.environment["FREETDSKIT_SQL_PASSWORD"] ?? "YourStrongPassword1" }
-    private var database: String { ProcessInfo.processInfo.environment["FREETDSKIT_SQL_DB"] ?? "FreeTDSKitTestDB" }
-    private let testTable = "DataTypeTest"
+final class FreeTDSKitIntegrationTests: FreeTDSKitIntegrationTestCase {
 
     func testDatabaseConnection() async throws {
         let dbConnection = try TDSConnection(
@@ -124,12 +118,7 @@ final class FreeTDSKitIntegrationTests: XCTestCase {
     }
 
     func testSpatialColumn() async throws {
-        let dbConnection = try TDSConnection(
-            server: "\(server):\(port)",
-            username: username,
-            password: password,
-            database: database
-        )
+        let dbConnection = try makeConnection()
         let result = try await dbConnection.execute(
             query: "SELECT SpatialColumn.STAsText() AS SpatialColumn FROM \(testTable) ORDER BY Id"
         )
@@ -160,12 +149,7 @@ final class FreeTDSKitIntegrationTests: XCTestCase {
     }
     
     func testStreamingSpatialColumn() async throws {
-        let dbConnection = try TDSConnection(
-            server: "\(server):\(port)",
-            username: username,
-            password: password,
-            database: database
-        )
+        let dbConnection = try makeConnection()
         var values: [String] = []
     for try await row in dbConnection.streamRows(
         query: "SELECT SpatialColumn.STAsText() AS SpatialColumn FROM \(testTable) ORDER BY Id"
@@ -217,6 +201,34 @@ final class FreeTDSKitIntegrationTests: XCTestCase {
     func testComputedSpatialColumn() async throws {
         
     }
+    
+    /// Retrieves all rows from the test table and prints them along with column
+        /// names.  This mirrors the manual describe/print workflow that developers
+        /// often use when verifying connection behaviour.
+        func testDescribeAndPrintRows() async throws {
+            let dbConnection = try makeConnection()
+            
+            let result = try await dbConnection.execute(query: "SELECT * FROM \(testTable) ORDER BY Id")
+
+            XCTAssertGreaterThan(result.rows.count, 0, "Query should return at least one row")
+
+            print("Columns:")
+            for (index, column) in result.columns.enumerated() {
+                print("Column \(index): \(column)")
+            }
+
+            print("\nRows:")
+            for (rowIndex, row) in result.rows.enumerated() {
+                print("Row \(rowIndex):")
+                for column in result.columns {
+                    let value = row[column] ?? .null
+                    print("  \(column): \(value)")
+                }
+            }
+
+            await dbConnection.close()
+        }
+
 
 }
 #endif

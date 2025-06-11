@@ -85,8 +85,8 @@ else
         echo "✅ Database and tables created"
 fi
 # Run the tests
-echo "🧪 Running tests..."
-swift test --filter FreeTDSKitIntegrationTests -Xswiftc -DINTEGRATION_TESTS
+echo "🧪 Running integration tests..."
+swift test --disable-swift-testing --enable-xctest -Xswiftc -DINTEGRATION_TESTS
 echo "✅ Integration tests passed!"
 
 # Stop Docker services after tests
