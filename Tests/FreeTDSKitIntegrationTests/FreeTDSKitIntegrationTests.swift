@@ -219,9 +219,10 @@ final class FreeTDSKitIntegrationTests: FreeTDSKitIntegrationTestCase {
 
             print("\nRows:")
             for (rowIndex, row) in result.rows.enumerated() {
-                print("Row \(rowIndex):")
+                print("Row \(rowIndex + 1):")
                 for column in result.columns {
-                    let value = row[column] ?? .null
+                    let raw = row[column] ?? .null
+                    let value = SQLResult.Value(column: column, raw: raw)
                     print("  \(column): \(value)")
                 }
             }
