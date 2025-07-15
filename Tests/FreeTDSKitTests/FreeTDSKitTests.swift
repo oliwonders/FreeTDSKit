@@ -3,7 +3,7 @@ import Testing
 
 @Test func testVersion() async throws {
     let version = FreeTDSKit.getFreeTDSVersion()
-    #expect(version != nil)
+    #expect(version != "")
     print("FreeTDS Version: \(String(describing: version))")
 }
 

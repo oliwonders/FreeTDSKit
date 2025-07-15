@@ -211,7 +211,7 @@ public actor TDSConnection {
     }
 
     /// Stream rows through a mapping closure that transforms each raw row dictionary into `T`.
-    public nonisolated func rows<T>(query: String,
+    public nonisolated func rows<T: Sendable>(query: String,
                         map: @Sendable @escaping ([String: SQLDataType]) throws -> T)
         -> AsyncThrowingStream<T, Error> {
         let base = rows(query: query)
@@ -232,7 +232,7 @@ public actor TDSConnection {
     }
 
     /// Stream rows directly into `Decodable` models. Column names must match model properties.
-    public nonisolated func rows<T: Decodable>(query: String,
+    public nonisolated func rows<T: Decodable & Sendable>(query: String,
                                    as type: T.Type)
         -> AsyncThrowingStream<T, Error> {
         let base = rows(query: query)

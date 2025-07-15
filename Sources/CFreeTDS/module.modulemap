@@ -1,6 +1,12 @@
+//module CFreeTDS {
+//    umprella header "FreeTDSWrapper.h"
+//	header "sybdb.h"
+//	link "sybdb"
+//	export *
+//}
+
 module CFreeTDS {
-    umprella header "FreeTDSWrapper.h"
-	header "sybdb.h"
-	link "sybdb"
-	export *
+    header "sybdb.h"
+    link "sybdb"
+    export *
 }
