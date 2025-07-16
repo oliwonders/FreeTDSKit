@@ -4,33 +4,41 @@ import PackageDescription
 let package = Package(
     name: "FreeTDSKit",
     platforms: [
-        .macOS(.v14,)
+        .macOS(.v15, )
     ],
     products: [
         .library(
             name: "FreeTDSKit",
-            targets: ["FreeTDSKit"])
+            targets: ["FreeTDSKit"]
+        )
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0")
     ],
     targets: [
         .target(
-                    name: "CFreeTDS",
-                    path: "Sources/CFreeTDS",
-                    publicHeadersPath: "include",
-                    cSettings: [
-                        .headerSearchPath("include")
-                    ],
-                    linkerSettings: [
-                        .unsafeFlags(["-L.", "-lsybdb"])
-                    ]
-                ),
+            name: "CFreeTDS",
+            path: "Sources/CFreeTDS",
+            publicHeadersPath: "include",
+            cSettings: [
+                .headerSearchPath("include")
+            ],
+            linkerSettings: [
+                .unsafeFlags(["-L.", "-lsybdb"])
+//                .unsafeFlags([
+//                    "-L./Sources/CFreeTDS",
+//                    "-lsybdb",
+//                    "-lssl",
+//                    "-lcrypto",
+//                    "-liconv",
+//                ])
+            ]
+        ),
         .target(
             name: "FreeTDSKit",
             dependencies: [
                 "CFreeTDS",
-                .product(name: "Logging", package: "swift-log")
+                .product(name: "Logging", package: "swift-log"),
             ]
         ),
         .testTarget(
@@ -41,7 +49,10 @@ let package = Package(
         .testTarget(
             name: "FreeTDSKitIntegrationTests",
             dependencies: ["FreeTDSKit"],
-            resources: [.copy("db-setup.sql"), .copy("docker-compose.yml"), .copy("run-integration-tests.sh")]
+            resources: [
+                .copy("db-setup.sql"), .copy("docker-compose.yml"),
+                .copy("run-integration-tests.sh"),
+            ]
         ),
     ]
 )

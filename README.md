@@ -26,26 +26,35 @@ let config = ConnectionConfiguration(
 let connection = try TDSConnection(configuration: config)
 
 // One-off query
-let result = try await connection.execute(query: "SELECT id, name FROM users")
+let result = try await connection.execute(queryString: "SELECT id, name FROM users")
+
+// Update using execute
+let updateResult = try await connection.execute(queryString: "UPDATE users SET name = 'NewName' WHERE id = 1")
+print("Updated rows: \(updateResult.affectedRows)")
+
+// Query with Decodable models
+struct User: Decodable {
+    let id: Int
+    let name: String
+}
+for try await user in connection.query(queryString: "SELECT id, name FROM users", as: User.self) {
+    print(user.id, user.name)
+}
 
 // Streaming rows as dictionaries
-for try await row in connection.streamRows(query: "SELECT id, name FROM users") {
+for try await row in connection.streamingQuery(queryString: "SELECT id, name FROM users") {
     print(row)
 }
 
 // Streaming rows with a mapping closure
-for try await name in connection.rows(query: "SELECT name FROM users", map: { row in
+for try await name in connection.query(queryString: "SELECT name FROM users", map: { row in
     row["name"]?.string ?? ""
 }) {
     print(name)
 }
 
 // Streaming rows directly to Decodable models
-struct User: Decodable {
-    let id: Int
-    let name: String
-}
-for try await user in connection.rows(query: "SELECT id, name FROM users", as: User.self) {
+for try await user in connection.query(queryString: "SELECT id, name FROM users", as: User.self) {
     print(user.id, user.name)
 }
 
@@ -55,7 +64,7 @@ await connection.close()
 // MARK: Error Handling
 // On query failures the thrown error includes the detailed SQL Server message.
 do {
-    _ = try await connection.execute(query: "SELECT * FROM NonExistentTable")
+    _ = try await connection.execute(queryString: "SELECT * FROM NonExistentTable")
 } catch {
     print(error)
     // e.g. "Query execution failed: Msg 208, Level 16, State 1, Line 1: Invalid object name 'NonExistentTable'."
