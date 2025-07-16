@@ -22,7 +22,7 @@ typedef struct {
 
 const char* getDBVersion(void);
 int initializeDBLibrary(void);
-DBPROCESS* connectToDatabase(const char* server, const char* user, const char* password, const char* database);
+DBPROCESS* connectToDatabase(const char* server, const char* user, const char* password, const char* database, const int timeout);
 int executeQuery(DBPROCESS* dbproc, const char* query);
 RowData* fetchResultsWithType(DBPROCESS* dbproc, int* rowCount);
 void freeFetchedResults(RowData* rows, int rowCount);

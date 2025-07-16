@@ -8,6 +8,9 @@
 import Foundation
 import CFreeTDS
 
+@_silgen_name("getLastTdsErrorMessage")
+private func getLastTdsErrorMessage() -> UnsafePointer<CChar>?
+
 public actor TDSConnection {
     private var connection: OpaquePointer?
 
@@ -18,34 +21,38 @@ public actor TDSConnection {
     }
 
     /// Configuration for connecting to a TDS database.
-    public struct Configuration {
+    public struct ConnectionConfiguration {
         public let host: String
         public let port: Int
         public let username: String
         public let password: String
         public let database: String
+        public let timeout: Int
 
         /// Create a configuration with host, port, credentials, and database name.
         public init(host: String,
                     port: Int = 1433,
                     username: String,
                     password: String,
-                    database: String) {
+                    database: String,
+                    timeout: Int = 5) {
             self.host = host
             self.port = port
             self.username = username
             self.password = password
             self.database = database
+            self.timeout = timeout
         }
     }
 
     /// Initialize a connection using a Configuration.
-    public init(configuration: Configuration) throws {
+    public init(configuration: ConnectionConfiguration) throws {
         try self.init(
             server: "\(configuration.host):\(configuration.port)",
             username: configuration.username,
             password: configuration.password,
-            database: configuration.database
+            database: configuration.database,
+            timeout: configuration.timeout
         )
     }
 
@@ -53,14 +60,17 @@ public actor TDSConnection {
     public init(server: String,
                 username: String,
                 password: String,
-                database: String) throws {
+                database: String,
+                timeout: Int = 5) throws {
         let dbInit = initializeDBLibrary()
         if dbInit != 0 {
-            throw TDSConnectionError.connectionFailed
+            let msg = getLastTdsErrorMessage().map { String(cString: $0) } ?? "DB init failed"
+            throw TDSConnectionError.connectionFailed(reason: msg)
         }
-        self.connection = connectToDatabase(server, username, password, database)
+        self.connection = connectToDatabase(server, username, password, database, Int32(timeout))
         if self.connection == nil {
-            throw TDSConnectionError.connectionFailed
+            let msg = getLastTdsErrorMessage().map { String(cString: $0) } ?? "Connection failed"
+            throw TDSConnectionError.connectionFailed(reason: msg)
         }
     }
 
@@ -76,12 +86,12 @@ public actor TDSConnection {
             let conn = OpaquePointer(bitPattern: connRaw)!
             let success = executeQuery(conn, query)
             if success != 0 {
-                throw TDSConnectionError.queryExecutionFailed
+                throw TDSConnectionError.queryExecutionFailed(reason: getLastTdsErrorMessage().map { String(cString: $0) } ?? "")
             }
 
             var rowCount: Int32 = 0
             guard let cRows = fetchResultsWithType(conn, &rowCount) else {
-                throw TDSConnectionError.queryExecutionFailed
+                throw TDSConnectionError.queryExecutionFailed(reason: getLastTdsErrorMessage().map { String(cString: $0) } ?? "")
             }
             defer { freeFetchedResults(cRows, rowCount) }
 
@@ -156,13 +166,15 @@ public actor TDSConnection {
                 }
                 let conn = OpaquePointer(bitPattern: connRaw)!
                 guard executeQuery(conn, query) == 0 else {
-                    continuation.finish(throwing: TDSConnectionError.queryExecutionFailed)
+                    let msg = getLastTdsErrorMessage().map { String(cString: $0) } ?? "Query failed"
+                    continuation.finish(throwing: TDSConnectionError.queryExecutionFailed(reason: msg))
                     return
                 }
 
                 var rowCount: Int32 = 0
                 guard let cRows = fetchResultsWithType(conn, &rowCount) else {
-                    continuation.finish(throwing: TDSConnectionError.queryExecutionFailed)
+                    let msg = getLastTdsErrorMessage().map { String(cString: $0) } ?? "Query failed"
+                    continuation.finish(throwing: TDSConnectionError.queryExecutionFailed(reason: msg))
                     return
                 }
                 defer { freeFetchedResults(cRows, rowCount) }
@@ -262,11 +274,19 @@ public actor TDSConnection {
     }
 }
 
-public enum TDSConnectionError: Error {
-    case connectionFailed
+public enum TDSConnectionError: Error, CustomStringConvertible {
+    case connectionFailed(reason: String)
     case notConnected
-    case queryExecutionFailed
+    case queryExecutionFailed(reason: String)
+
+    public var description: String {
+        switch self {
+        case .connectionFailed(let reason): return "Connection failed: \(reason)"
+        case .notConnected: return "Not connected to the database."
+        case .queryExecutionFailed(let reason): return "Query execution failed: \(reason)"
+        }
+    }
 }
 
 // MARK: - Sendable Conformance
-extension TDSConnection.Configuration: Sendable {}
+extension TDSConnection.ConnectionConfiguration: Sendable {}

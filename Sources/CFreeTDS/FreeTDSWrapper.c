@@ -12,6 +12,17 @@
 
 #include "FreeTDSWrapper.h"
 
+static char lastErrorMessage[1024] = "";
+
+static int errorHandler(DBPROCESS *dbproc, int severity, int dberr, int oserr, char *dberrstr, char *oserrstr) {
+    snprintf(lastErrorMessage, sizeof(lastErrorMessage), "DB-Lib error %d (severity %d): %s [%s]", dberr, severity, dberrstr, oserrstr ? oserrstr : "no os error");
+    return INT_CANCEL;
+}
+
+const char* getLastTdsErrorMessage(void) {
+    return lastErrorMessage;
+}
+
 const char* getDBVersion(void) {
     return dbversion();
 }
@@ -22,7 +33,7 @@ int initializeDBLibrary(void) {
 }
 
 // Connect to the database
-DBPROCESS* connectToDatabase(const char* server, const char* user, const char* password, const char* database) {
+DBPROCESS* connectToDatabase(const char* server, const char* user, const char* password, const char* database, const int timeout) {
     LOGINREC *login;
     DBPROCESS *dbproc;
 
@@ -31,9 +42,12 @@ DBPROCESS* connectToDatabase(const char* server, const char* user, const char* p
     if (login == NULL) {
         return NULL;
     }
+    dbsetlogintime(timeout);
+    
     DBSETLUSER(login, user);
     DBSETLPWD(login, password);
     DBSETLAPP(login, "FreeTDSWrapper");
+    dberrhandle(errorHandler);
     dbproc = dbopen(login, server);
     dbloginfree(login);
     if (dbproc == NULL) {
