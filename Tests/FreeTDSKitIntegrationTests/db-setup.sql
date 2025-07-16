@@ -72,4 +72,14 @@ BEGIN
         0x0A0B0C0D0E0F10111213, NULL,
         geography::STGeomFromText('POINT(-118.243683 34.052235)', 4326));
 END
+
+-- Check if the table exists
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[UpdateTableTest]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE UpdateTableTest (
+        Id INT PRIMARY KEY IDENTITY(1,1),         -- Auto-incrementing primary key
+        Text VARCHAR(50) NOT NULL,       -- Variable-length character data
+    );
+END
+GO
 GO

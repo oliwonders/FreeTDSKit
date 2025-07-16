@@ -191,20 +191,25 @@ import XCTest
         func testDecodableRows() async throws {
             struct Row: Decodable, Equatable {
                 let Id: Int
+                let VarCharColumn: String?
             }
+            
             let dbConnection = try makeConnection()
             var results: [Row] = []
             for try await row in dbConnection.rows(
-                query: "SELECT Id FROM \(testTable)",
+                query: "SELECT Id, VarCharColumn FROM \(testTable)",
                 as: Row.self
             ) {
                 results.append(row)
             }
             let syncResult = try await dbConnection.execute(
-                query: "SELECT Id FROM \(testTable)"
+                query: "SELECT Id, VarCharColumn FROM \(testTable)"
             )
-            let expected = syncResult.rows.compactMap { dict in dict["Id"]?.int
-            }.map { Row(Id: $0) }
+            let expected: [Row] = syncResult.rows.compactMap { dict in
+                guard let id = dict["Id"]?.int else { return nil }
+                let varchar = dict["VarCharColumn"]?.string
+                return Row(Id: id, VarCharColumn: varchar)
+            }
             XCTAssertEqual(
                 results,
                 expected,
@@ -212,6 +217,7 @@ import XCTest
             )
             await dbConnection.close()
         }
+        
 
         /// Retrieves all rows from the test table and prints them along with column
         /// names.  This mirrors the manual describe/print workflow that developers
