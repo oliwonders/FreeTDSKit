@@ -11,6 +11,47 @@ import CFreeTDS
 @_silgen_name("getLastTdsErrorMessage")
 private func getLastTdsErrorMessage() -> UnsafePointer<CChar>?
 
+/// Configuration for connecting to a TDS database.
+public struct ConnectionConfiguration: Sendable {
+    /// Server hostname or IP address.
+    public var host: String
+    /// Server port.
+    public var port: Int
+    /// Username for authentication.
+    public var username: String
+    /// Password for authentication.
+    public var password: String
+    /// Database name.
+    public var database: String
+    /// Connection timeout in seconds.
+    public var timeout: Int
+
+    /// Create an empty default configuration.
+    public init() {
+        self.host = ""
+        self.port = 1433
+        self.username = ""
+        self.password = ""
+        self.database = ""
+        self.timeout = 5
+    }
+
+    /// Create a configuration with host, port, credentials, and database name.
+    public init(host: String,
+                port: Int = 1433,
+                username: String,
+                password: String,
+                database: String,
+                timeout: Int = 5) {
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+        self.database = database
+        self.timeout = timeout
+    }
+}
+
 public actor TDSConnection {
     private var connection: OpaquePointer?
 
@@ -18,31 +59,6 @@ public actor TDSConnection {
     private var rawConnection: Int? {
         guard let conn = connection else { return nil }
         return Int(bitPattern: conn)
-    }
-
-    /// Configuration for connecting to a TDS database.
-    public struct ConnectionConfiguration {
-        public let host: String
-        public let port: Int
-        public let username: String
-        public let password: String
-        public let database: String
-        public let timeout: Int
-
-        /// Create a configuration with host, port, credentials, and database name.
-        public init(host: String,
-                    port: Int = 1433,
-                    username: String,
-                    password: String,
-                    database: String,
-                    timeout: Int = 5) {
-            self.host = host
-            self.port = port
-            self.username = username
-            self.password = password
-            self.database = database
-            self.timeout = timeout
-        }
     }
 
     /// Initialize a connection using a Configuration.
@@ -289,4 +305,3 @@ public enum TDSConnectionError: Error, CustomStringConvertible {
 }
 
 // MARK: - Sendable Conformance
-extension TDSConnection.ConnectionConfiguration: Sendable {}

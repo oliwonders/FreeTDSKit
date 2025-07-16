@@ -14,6 +14,15 @@
 
 static char lastErrorMessage[1024] = "";
 
+// Message handler to capture detailed SQL Server error messages.
+static int messageHandler(DBPROCESS *dbproc, DBINT msgno, int msgstate, int severity,
+                          char *msgtext, char *srvname, char *procname, int line) {
+    // Format similar to SQL Server clients: Msg <msgno>, Level <severity>, State <msgstate>, Line <line>: <msgtext>
+    snprintf(lastErrorMessage, sizeof(lastErrorMessage),
+             "Msg %ld, Level %d, State %d, Line %d: %s",
+             (long)msgno, severity, msgstate, line, msgtext);
+    return 0;
+}
 static int errorHandler(DBPROCESS *dbproc, int severity, int dberr, int oserr, char *dberrstr, char *oserrstr) {
     snprintf(lastErrorMessage, sizeof(lastErrorMessage), "DB-Lib error %d (severity %d): %s [%s]", dberr, severity, dberrstr, oserrstr ? oserrstr : "no os error");
     return INT_CANCEL;
@@ -48,6 +57,7 @@ DBPROCESS* connectToDatabase(const char* server, const char* user, const char* p
     DBSETLPWD(login, password);
     DBSETLAPP(login, "FreeTDSWrapper");
     dberrhandle(errorHandler);
+    dbmsghandle(messageHandler);
     dbproc = dbopen(login, server);
     dbloginfree(login);
     if (dbproc == NULL) {

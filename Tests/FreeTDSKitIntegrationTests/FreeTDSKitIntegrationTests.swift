@@ -87,7 +87,7 @@ import XCTest
 
         func testConnectionWithConfiguration() async throws {
 
-            let configuration = ConnectionConfiguration()
+            var configuration = ConnectionConfiguration()
             configuration.host = "127.0.0.1"
             configuration.port = 1438
             configuration.username = "sa"
@@ -96,9 +96,9 @@ import XCTest
             configuration.timeout = 10
 
             do {
-                let connection = try TDSConnection(configuration: configuration)
+                let dbConnection = try TDSConnection(configuration: configuration)
                 XCTAssertNotNil(dbConnection)
-                await connection.close()
+                await dbConnection.close()
 
             } catch {
                 XCTFail("❌ Connection should have succeeded: \(error)")

@@ -9,6 +9,9 @@
 #define FreeTDSWrapper_h
 
 #include <sybdb.h>
+
+// Retrieve the most recent error or message text from the TDS library.
+const char* getLastTdsErrorMessage(void);
 //#include "/opt/homebrew/include/sybdb.h"
 
 // Structure to hold a single row's data

@@ -1,38 +1,22 @@
 # FreeTDSKit
 
-FreeTDSKit is a Swift-native wrapper around the FreeTDS C library, providing a Swift-friendly API using only Swift types (no C) to natively connect to Microsoft SQL Server and Sybase databases and execute queries.
+FreeTDSKit is a Swift-native wrapper around the FreeTDS C library, providing a Swift-friendly API using only Swift types (no C) to natively connect to Microsoft SQL Server (no Sybase support yet) database and execute queries.
+
+> This is an experimental implemenation and I expect to refine it along the way. 
 
 ## Features
 
-- Provide a Swift-friendly API using only Swift types (no C) for connecting to Microsoft SQL Server and Sybase databases.
+- Provide a Swift-friendly API using only Swift types (no C) for connecting to Microsoft SQL Server.
 - Execute SQL queries and process results with native Swift types.
 - Leverage the capabilities of the FreeTDS library transparently under the hood.
 
-> As of now, FreeTDSKit requires `freetds` installation via Homebrew.
-
-```
-brew install freetds
-```
-
-### Adding FreeTDS Package Config Files to Homebrew
-
-By default FreeTDS does not include a package config file (freetds.pc), therefore Xcode cannot find the sysbdb.h librarying using <> for system headers, which is more convenient than hardcoding the path using quotes.
-
-Running the included `Support/generate_freetds_pc.sh` file will locate the installed FreeTDS version and generate a .PC file in the install /lib/pkgconfig directly, then create a symbolic link here `/opt/homebrew/lib/pkgconfig/` to the .PC file.
-
-```
-chmod +x generate_freetds_pc.sh
-./generate_freetds_pc.sh
-```
-
-> Remember to re-run after updates.
 
 ## Usage
 ```swift
 import FreeTDSKit
 
 // Build a configuration and open a connection
-let config = TDSConnection.Configuration(
+let config = ConnectionConfiguration(
     host: "your_server",
     port: 1438,
     username: "your_user",
@@ -67,6 +51,15 @@ for try await user in connection.rows(query: "SELECT id, name FROM users", as: U
 
 // Close when you're done
 await connection.close()
+
+// MARK: Error Handling
+// On query failures the thrown error includes the detailed SQL Server message.
+do {
+    _ = try await connection.execute(query: "SELECT * FROM NonExistentTable")
+} catch {
+    print(error)
+    // e.g. "Query execution failed: Msg 208, Level 16, State 1, Line 1: Invalid object name 'NonExistentTable'."
+}
 
 ## Integration Tests
 
