@@ -5,8 +5,8 @@
 //  Created by David Oliver on 12/28/24.
 //
 
-import Foundation
 import CFreeTDS
+import Foundation
 
 @_silgen_name("getLastTdsErrorMessage")
 private func getLastTdsErrorMessage() -> UnsafePointer<CChar>?
@@ -37,12 +37,14 @@ public struct ConnectionConfiguration: Sendable {
     }
 
     /// Create a configuration with host, port, credentials, and database name.
-    public init(host: String,
-                port: Int = 1433,
-                username: String,
-                password: String,
-                database: String,
-                timeout: Int = 5) {
+    public init(
+        host: String,
+        port: Int = 1433,
+        username: String,
+        password: String,
+        database: String,
+        timeout: Int = 5
+    ) {
         self.host = host
         self.port = port
         self.username = username
@@ -73,25 +75,36 @@ public actor TDSConnection {
     }
 
     /// Initialize a connection using raw parameters.
-    public init(server: String,
-                username: String,
-                password: String,
-                database: String,
-                timeout: Int = 5) throws {
+    public init(
+        server: String,
+        username: String,
+        password: String,
+        database: String,
+        timeout: Int = 5
+    ) throws {
         let dbInit = initializeDBLibrary()
         if dbInit != 0 {
-            let msg = getLastTdsErrorMessage().map { String(cString: $0) } ?? "DB init failed"
+            let msg =
+                getLastTdsErrorMessage().map { String(cString: $0) }
+                ?? "DB init failed"
             throw TDSConnectionError.connectionFailed(reason: msg)
         }
-        self.connection = connectToDatabase(server, username, password, database, Int32(timeout))
+        self.connection = connectToDatabase(
+            server,
+            username,
+            password,
+            database,
+            Int32(timeout)
+        )
         if self.connection == nil {
-            let msg = getLastTdsErrorMessage().map { String(cString: $0) } ?? "Connection failed"
+            let msg =
+                getLastTdsErrorMessage().map { String(cString: $0) }
+                ?? "Connection failed"
             throw TDSConnectionError.connectionFailed(reason: msg)
         }
     }
 
-
-    public func execute(query: String) async throws -> SQLResult {
+    public func execute(queryString: String) async throws -> SQLResult {
         guard let connection = connection else {
             throw TDSConnectionError.notConnected
         }
@@ -100,14 +113,20 @@ public actor TDSConnection {
 
         return try await Task.detached(priority: .userInitiated) {
             let conn = OpaquePointer(bitPattern: connRaw)!
-            let success = executeQuery(conn, query)
+            let success = executeQuery(conn, queryString)
             if success != 0 {
-                throw TDSConnectionError.queryExecutionFailed(reason: getLastTdsErrorMessage().map { String(cString: $0) } ?? "")
+                throw TDSConnectionError.queryExecutionFailed(
+                    reason: getLastTdsErrorMessage().map { String(cString: $0) }
+                        ?? ""
+                )
             }
 
             var rowCount: Int32 = 0
             guard let cRows = fetchResultsWithType(conn, &rowCount) else {
-                throw TDSConnectionError.queryExecutionFailed(reason: getLastTdsErrorMessage().map { String(cString: $0) } ?? "")
+                throw TDSConnectionError.queryExecutionFailed(
+                    reason: getLastTdsErrorMessage().map { String(cString: $0) }
+                        ?? ""
+                )
             }
             defer { freeFetchedResults(cRows, rowCount) }
 
@@ -141,16 +160,21 @@ public actor TDSConnection {
                     else { continue }
 
                     let key = String(cString: namePtr)
-                    let value = determineSQLType(valPtr, columnType: Int(row.columnTypes?[j] ?? 0))
+                    let value = determineSQLType(
+                        valPtr,
+                        columnType: Int(row.columnTypes?[j] ?? 0)
+                    )
                     dict[key] = value
                 }
                 results.append(dict)
             }
 
             let affectedRows = Int(dbcount(conn))
-            return SQLResult(columns: columnNames,
-                             rows: results,
-                             affectedRows: affectedRows)
+            return SQLResult(
+                columns: columnNames,
+                rows: results,
+                affectedRows: affectedRows
+            )
         }.value
     }
 
@@ -170,27 +194,43 @@ public actor TDSConnection {
     /// Execute the given SQL query and return an async sequence of row dictionaries.
     /// Rows are yielded one by one as they are mapped, and the sequence finishes
     /// when all rows have been produced or if an error occurs. Cancellation is supported.
-    public nonisolated func rows(query: String) -> AsyncThrowingStream<[String: SQLDataType], Error> {
+    public nonisolated func query(query: String) -> AsyncThrowingStream<
+        [String: SQLDataType], Error
+    > {
         AsyncThrowingStream { continuation in
             Task.detached(priority: .userInitiated) {
                 defer { continuation.finish() }
 
                 let maybeRaw = await self.rawConnection
                 guard let connRaw = maybeRaw else {
-                    continuation.finish(throwing: TDSConnectionError.notConnected)
+                    continuation.finish(
+                        throwing: TDSConnectionError.notConnected
+                    )
                     return
                 }
                 let conn = OpaquePointer(bitPattern: connRaw)!
                 guard executeQuery(conn, query) == 0 else {
-                    let msg = getLastTdsErrorMessage().map { String(cString: $0) } ?? "Query failed"
-                    continuation.finish(throwing: TDSConnectionError.queryExecutionFailed(reason: msg))
+                    let msg =
+                        getLastTdsErrorMessage().map { String(cString: $0) }
+                        ?? "Query failed"
+                    continuation.finish(
+                        throwing: TDSConnectionError.queryExecutionFailed(
+                            reason: msg
+                        )
+                    )
                     return
                 }
 
                 var rowCount: Int32 = 0
                 guard let cRows = fetchResultsWithType(conn, &rowCount) else {
-                    let msg = getLastTdsErrorMessage().map { String(cString: $0) } ?? "Query failed"
-                    continuation.finish(throwing: TDSConnectionError.queryExecutionFailed(reason: msg))
+                    let msg =
+                        getLastTdsErrorMessage().map { String(cString: $0) }
+                        ?? "Query failed"
+                    continuation.finish(
+                        throwing: TDSConnectionError.queryExecutionFailed(
+                            reason: msg
+                        )
+                    )
                     return
                 }
                 defer { freeFetchedResults(cRows, rowCount) }
@@ -224,7 +264,10 @@ public actor TDSConnection {
                         else { continue }
 
                         let key = String(cString: namePtr)
-                        let value = determineSQLType(valPtr, columnType: Int(row.columnTypes?[j] ?? 0))
+                        let value = determineSQLType(
+                            valPtr,
+                            columnType: Int(row.columnTypes?[j] ?? 0)
+                        )
                         dict[key] = value
                     }
                     continuation.yield(dict)
@@ -233,16 +276,21 @@ public actor TDSConnection {
         }
     }
 
-    /// Alias for `rows(query:)` to emphasize streaming semantics.
-    public nonisolated func streamRows(query: String) -> AsyncThrowingStream<[String: SQLDataType], Error> {
-        rows(query: query)
+    /// Alias for `query(query:)` to emphasize streaming semantics.
+    public nonisolated func streamingQuery(queryString: String) -> AsyncThrowingStream<
+        [String: SQLDataType], Error
+    > {
+        query(query: queryString)
     }
 
     /// Stream rows through a mapping closure that transforms each raw row dictionary into `T`.
-    public nonisolated func rows<T: Sendable>(query: String,
-                        map: @Sendable @escaping ([String: SQLDataType]) throws -> T)
-        -> AsyncThrowingStream<T, Error> {
-        let base = rows(query: query)
+    public nonisolated func query<T: Sendable>(
+        queryString: String,
+        map: @Sendable @escaping ([String: SQLDataType]) throws -> T
+    )
+        -> AsyncThrowingStream<T, Error>
+    {
+        let base = query(query: queryString)
         return AsyncThrowingStream<T, Error> { continuation in
             Task.detached(priority: .userInitiated) {
                 defer { continuation.finish() }
@@ -260,10 +308,13 @@ public actor TDSConnection {
     }
 
     /// Stream rows directly into `Decodable` models. Column names must match model properties.
-    public nonisolated func rows<T: Decodable & Sendable>(query: String,
-                                   as type: T.Type)
-        -> AsyncThrowingStream<T, Error> {
-        let base = rows(query: query)
+    public nonisolated func query<T: Decodable & Sendable>(
+        queryString: String,
+        as type: T.Type
+    )
+        -> AsyncThrowingStream<T, Error>
+    {
+        let base = query(query: queryString)
         return AsyncThrowingStream<T, Error> { continuation in
             Task.detached(priority: .userInitiated) {
                 defer { continuation.finish() }
@@ -271,7 +322,9 @@ public actor TDSConnection {
                 for try await row in base {
                     if Task.isCancelled { break }
                     do {
-                        let jsonDict = row.reduce(into: [String: Any]()) { acc, kv in
+                        let jsonDict = row.reduce(into: [String: Any]()) {
+                            acc,
+                            kv in
                             acc[kv.key] = kv.value.jsonValue
                         }
                         let data = try JSONSerialization.data(
@@ -297,11 +350,11 @@ public enum TDSConnectionError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .connectionFailed(let reason): return "Connection failed: \(reason)"
+        case .connectionFailed(let reason):
+            return "Connection failed: \(reason)"
         case .notConnected: return "Not connected to the database."
-        case .queryExecutionFailed(let reason): return "Query execution failed: \(reason)"
+        case .queryExecutionFailed(let reason):
+            return "Query execution failed: \(reason)"
         }
     }
 }
-
-// MARK: - Sendable Conformance

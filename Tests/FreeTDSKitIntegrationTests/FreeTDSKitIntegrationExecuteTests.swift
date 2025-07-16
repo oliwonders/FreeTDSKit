@@ -1,7 +1,7 @@
 import XCTest
 @testable import FreeTDSKit
 
-#if INTEGRATION_TESTS
+#if !INTEGRATION_TESTS
 
 /// Additional integration tests for FreeTDSKit.
 /// Exercises computed spatial columns and binary data handling.

@@ -2,7 +2,7 @@ import XCTest
 
 @testable import FreeTDSKit
 
-#if INTEGRATION_TESTS
+#if !INTEGRATION_TESTS
 
     /// Integration tests require a running SQL Server (e.g. via Docker).
     /// They read connection parameters from environment variables:
@@ -110,7 +110,7 @@ import XCTest
         func testBasicQuery() async throws {
             let dbConnection = try makeConnection()
             let result = try await dbConnection.execute(
-                query: "SELECT * FROM \(testTable)"
+                queryString: "SELECT * FROM \(testTable)"
             )
             XCTAssertGreaterThan(
                 result.affectedRows,
@@ -123,7 +123,7 @@ import XCTest
         func testIdColumn() async throws {
             let dbConnection = try makeConnection()
             let result = try await dbConnection.execute(
-                query: "SELECT Id FROM \(testTable)"
+                queryString: "SELECT Id FROM \(testTable)"
             )
             XCTAssertEqual(result.columns.count, 1, "Column count should be 1")
             XCTAssertEqual(
@@ -137,7 +137,7 @@ import XCTest
         func testColumns() async throws {
             let dbConnection = try makeConnection()
             let result = try await dbConnection.execute(
-                query: "SELECT * FROM \(testTable)"
+                queryString: "SELECT * FROM \(testTable)"
             )
             XCTAssertFalse(
                 result.columns.isEmpty,
@@ -149,11 +149,11 @@ import XCTest
         func testStreamingRows() async throws {
             let dbConnection = try makeConnection()
             let syncResult = try await dbConnection.execute(
-                query: "SELECT * FROM \(testTable)"
+                queryString: "SELECT * FROM \(testTable)"
             )
             var streamCount = 0
-            for try await _ in dbConnection.streamRows(
-                query: "SELECT * FROM \(testTable)"
+            for try await _ in dbConnection.streamingQuery(
+                queryString: "SELECT * FROM \(testTable)"
             ) {
                 streamCount += 1
             }
@@ -168,8 +168,8 @@ import XCTest
         func testMappedRows() async throws {
             let dbConnection = try makeConnection()
             var ids: [Int] = []
-            for try await id in dbConnection.rows(
-                query: "SELECT Id FROM \(testTable)",
+            for try await id in dbConnection.query(
+                queryString: "SELECT Id FROM \(testTable)",
                 map: { row in
                     row["Id"]?.int ?? -1
                 }
@@ -177,7 +177,7 @@ import XCTest
                 ids.append(id)
             }
             let syncResult = try await dbConnection.execute(
-                query: "SELECT Id FROM \(testTable)"
+                queryString: "SELECT Id FROM \(testTable)"
             )
             let expected = syncResult.rows.compactMap { $0["Id"]?.int }
             XCTAssertEqual(
@@ -196,14 +196,15 @@ import XCTest
             
             let dbConnection = try makeConnection()
             var results: [Row] = []
-            for try await row in dbConnection.rows(
-                query: "SELECT Id, VarCharColumn FROM \(testTable)",
+            for try await row in dbConnection.query(
+                queryString: "SELECT Id, VarCharColumn FROM \(testTable)",
                 as: Row.self
             ) {
                 results.append(row)
             }
+            
             let syncResult = try await dbConnection.execute(
-                query: "SELECT Id, VarCharColumn FROM \(testTable)"
+                queryString: "SELECT Id, VarCharColumn FROM \(testTable)"
             )
             let expected: [Row] = syncResult.rows.compactMap { dict in
                 guard let id = dict["Id"]?.int else { return nil }
@@ -226,7 +227,7 @@ import XCTest
             let dbConnection = try makeConnection()
 
             let result = try await dbConnection.execute(
-                query: "SELECT * FROM \(testTable) ORDER BY Id"
+                queryString: "SELECT * FROM \(testTable) ORDER BY Id"
             )
 
             XCTAssertGreaterThan(
@@ -258,7 +259,7 @@ import XCTest
             do {
                 let dbConnection = try makeConnection()
                 _ = try await dbConnection.execute(
-                    query: "SELECT * FROM invalidTable"
+                    queryString: "SELECT * FROM invalidTable"
                 )
                 await dbConnection.close()
                 XCTFail("❌ Query should have failed")

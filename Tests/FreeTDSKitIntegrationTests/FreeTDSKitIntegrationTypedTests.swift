@@ -1,14 +1,14 @@
 import XCTest
 @testable import FreeTDSKit
 
-#if INTEGRATION_TESTS
+#if !INTEGRATION_TESTS
 
 final class FreeTDSKitIntegrationTypedTests: FreeTDSKitIntegrationTestCase {
     
     func testSpatialColumn() async throws {
         let dbConnection = try makeConnection()
         let result = try await dbConnection.execute(
-            query: "SELECT SpatialColumn.STAsText() AS SpatialColumn FROM \(testTable) ORDER BY Id"
+            queryString: "SELECT SpatialColumn.STAsText() AS SpatialColumn FROM \(testTable) ORDER BY Id"
         )
         XCTAssertEqual(
             result.rows.count, 2,
@@ -39,8 +39,8 @@ final class FreeTDSKitIntegrationTypedTests: FreeTDSKitIntegrationTestCase {
     func testStreamingSpatialColumn() async throws {
         let dbConnection = try makeConnection()
         var values: [String] = []
-    for try await row in dbConnection.streamRows(
-        query: "SELECT SpatialColumn.STAsText() AS SpatialColumn FROM \(testTable) ORDER BY Id"
+    for try await row in dbConnection.streamingQuery(
+        queryString: "SELECT SpatialColumn.STAsText() AS SpatialColumn FROM \(testTable) ORDER BY Id"
     ) {
         if let str = row["SpatialColumn"]?.string {
             values.append(str)
@@ -67,8 +67,8 @@ final class FreeTDSKitIntegrationTypedTests: FreeTDSKitIntegrationTestCase {
             database: database
         )
         var rows: [SpatialRow] = []
-    for try await row in dbConnection.rows(
-        query: "SELECT SpatialColumn.STAsText() AS SpatialColumn FROM \(testTable) ORDER BY Id",
+    for try await row in dbConnection.query(
+        queryString: "SELECT SpatialColumn.STAsText() AS SpatialColumn FROM \(testTable) ORDER BY Id",
         as: SpatialRow.self
     ) {
             rows.append(row)
@@ -95,7 +95,7 @@ final class FreeTDSKitIntegrationTypedTests: FreeTDSKitIntegrationTestCase {
     func testComputedSpatialColumns() async throws {
         let db = try makeConnection()
         let result = try await db.execute(
-            query: "SELECT ComputedSpatialColumnLat, ComputedSpatialColumnLong FROM \(testTable) ORDER BY Id"
+            queryString: "SELECT ComputedSpatialColumnLat, ComputedSpatialColumnLong FROM \(testTable) ORDER BY Id"
         )
         XCTAssertEqual(result.rows.count, 2, "Should return two rows for computed spatial columns")
 
@@ -124,7 +124,7 @@ final class FreeTDSKitIntegrationTypedTests: FreeTDSKitIntegrationTestCase {
     func testBinaryColumns() async throws {
         let db = try makeConnection()
         let result = try await db.execute(
-            query: "SELECT BinaryColumn, VarBinaryColumn FROM \(testTable) ORDER BY Id"
+            queryString: "SELECT BinaryColumn, VarBinaryColumn FROM \(testTable) ORDER BY Id"
         )
         XCTAssertEqual(result.rows.count, 2, "Should return two rows for binary columns")
 
