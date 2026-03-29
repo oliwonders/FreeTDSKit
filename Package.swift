@@ -24,14 +24,13 @@ let package = Package(
                 .headerSearchPath("include")
             ],
             linkerSettings: [
-                .unsafeFlags(["-L.", "-lsybdb"])
-//                .unsafeFlags([
-//                    "-L./Sources/CFreeTDS",
-//                    "-lsybdb",
-//                    "-lssl",
-//                    "-lcrypto",
-//                    "-liconv",
-//                ])
+                .unsafeFlags([
+                    "-L\(Context.packageDirectory)/Sources/CFreeTDS",
+                    "-lsybdb",
+                    "-lssl",
+                    "-lcrypto",
+                    "-liconv",
+                ])
             ]
         ),
         .target(
