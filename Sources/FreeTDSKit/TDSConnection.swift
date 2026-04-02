@@ -343,7 +343,7 @@ public actor TDSConnection {
     }
 }
 
-public enum TDSConnectionError: Error, CustomStringConvertible {
+public enum TDSConnectionError: Error, CustomStringConvertible, LocalizedError {
     case connectionFailed(reason: String)
     case notConnected
     case queryExecutionFailed(reason: String)
@@ -357,4 +357,6 @@ public enum TDSConnectionError: Error, CustomStringConvertible {
             return "Query execution failed: \(reason)"
         }
     }
+
+    public var errorDescription: String? { description }
 }

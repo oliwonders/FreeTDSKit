@@ -13,14 +13,18 @@
 #include "FreeTDSWrapper.h"
 
 static char lastErrorMessage[1024] = "";
+static char lastServerMessage[1024] = "";
 
 // Message handler to capture detailed SQL Server error messages.
 static int messageHandler(DBPROCESS *dbproc, DBINT msgno, int msgstate, int severity,
                           char *msgtext, char *srvname, char *procname, int line) {
-    // Format similar to SQL Server clients: Msg <msgno>, Level <severity>, State <msgstate>, Line <line>: <msgtext>
-    snprintf(lastErrorMessage, sizeof(lastErrorMessage),
-             "Msg %ld, Level %d, State %d, Line %d: %s",
-             (long)msgno, severity, msgstate, line, msgtext);
+    // Severity >= 11 means an actual error (not informational).
+    // Store in a separate buffer so errorHandler can't overwrite it.
+    if (severity >= 11) {
+        snprintf(lastServerMessage, sizeof(lastServerMessage),
+                 "Msg %ld, Level %d, State %d, Line %d: %s",
+                 (long)msgno, severity, msgstate, line, msgtext);
+    }
     return 0;
 }
 static int errorHandler(DBPROCESS *dbproc, int severity, int dberr, int oserr, char *dberrstr, char *oserrstr) {
@@ -28,7 +32,11 @@ static int errorHandler(DBPROCESS *dbproc, int severity, int dberr, int oserr, c
     return INT_CANCEL;
 }
 
+// Prefer the SQL Server message (from messageHandler) when available, as it contains
+// the actual error text (e.g. "Incorrect syntax near ','"). Fall back to the DB-Lib
+// wrapper message only when no server message was recorded.
 const char* getLastTdsErrorMessage(void) {
+    if (lastServerMessage[0] != '\0') { return lastServerMessage; }
     return lastErrorMessage;
 }
 
@@ -46,6 +54,8 @@ DBPROCESS* connectToDatabase(const char* server, const char* user, const char* p
     LOGINREC *login;
     DBPROCESS *dbproc;
 
+    lastServerMessage[0] = '\0';
+    lastErrorMessage[0] = '\0';
     dbinit();
     login = dblogin();
     if (login == NULL) {
@@ -72,6 +82,8 @@ DBPROCESS* connectToDatabase(const char* server, const char* user, const char* p
 
 // Execute a query
 int executeQuery(DBPROCESS* dbproc, const char* query) {
+    lastServerMessage[0] = '\0';
+    lastErrorMessage[0] = '\0';
     if (dbcmd(dbproc, query) == FAIL) {
         return -1;
     }
