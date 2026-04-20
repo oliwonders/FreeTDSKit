@@ -12,7 +12,7 @@ GO
 -- Check if the table exists
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[DataTypeTest]') AND type in (N'U'))
 BEGIN
-    CREATE TABLE DataTypeTest (
+    CREATE TABLE dbo.DataTypeTest (
         Id INT PRIMARY KEY IDENTITY(1,1),         -- Auto-incrementing primary key
         CharColumn CHAR(10) NOT NULL,             -- Fixed-length character data
         VarCharColumn VARCHAR(50) NOT NULL,       -- Variable-length character data
@@ -43,12 +43,23 @@ BEGIN
 END
 GO
 
-    ALTER TABLE [DataTypeTest] ADD  DEFAULT (newid()) FOR [UniqueIdentifierColumn]
-    GO
--- Insert sample data if the table is empty
-IF NOT EXISTS (SELECT 1 FROM DataTypeTest)
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.default_constraints
+    WHERE parent_object_id = OBJECT_ID(N'[dbo].[DataTypeTest]')
+      AND name = N'DF_DataTypeTest_UniqueIdentifierColumn'
+)
 BEGIN
-    INSERT INTO DataTypeTest (
+    ALTER TABLE dbo.DataTypeTest
+        ADD CONSTRAINT DF_DataTypeTest_UniqueIdentifierColumn
+        DEFAULT (newid()) FOR UniqueIdentifierColumn;
+END
+GO
+
+-- Insert sample data if the table is empty
+IF NOT EXISTS (SELECT 1 FROM dbo.DataTypeTest)
+BEGIN
+    INSERT INTO dbo.DataTypeTest (
         CharColumn, VarCharColumn, IntColumn, SmallIntColumn, BigIntColumn,
         DecimalColumn, FloatColumn, RealColumn, BitColumn, DateColumn,
         TimeColumn, DateTimeColumn, SmallDateTimeColumn, DateTime2Column,
@@ -72,14 +83,14 @@ BEGIN
         0x0A0B0C0D0E0F10111213, NULL,
         geography::STGeomFromText('POINT(-118.243683 34.052235)', 4326));
 END
+GO
 
 -- Check if the table exists
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[UpdateTableTest]') AND type in (N'U'))
 BEGIN
-    CREATE TABLE UpdateTableTest (
+    CREATE TABLE dbo.UpdateTableTest (
         Id INT PRIMARY KEY IDENTITY(1,1),         -- Auto-incrementing primary key
-        Text VARCHAR(50) NOT NULL,       -- Variable-length character data
+        Text VARCHAR(50) NOT NULL        -- Variable-length character data
     );
 END
-GO
 GO

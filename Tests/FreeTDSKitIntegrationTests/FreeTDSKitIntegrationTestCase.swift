@@ -2,6 +2,14 @@ import XCTest
 @testable import FreeTDSKit
 
 class FreeTDSKitIntegrationTestCase: XCTestCase {
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["FREETDSKIT_RUN_INTEGRATION_TESTS"] == "1",
+            "Integration tests require Docker and SQL Server. Set FREETDSKIT_RUN_INTEGRATION_TESTS=1 to run them."
+        )
+    }
+
     var server: String { ProcessInfo.processInfo.environment["FREETDSKIT_SQL_SERVER"] ?? "localhost" }
     var port: String { ProcessInfo.processInfo.environment["FREETDSKIT_SQL_PORT"] ?? "1438" }
     var username: String { ProcessInfo.processInfo.environment["FREETDSKIT_SQL_USER"] ?? "sa" }

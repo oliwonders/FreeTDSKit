@@ -3,15 +3,19 @@ set -e  # Exit on error
 
 FREETDSKIT_SQL_USER="${FREETDSKIT_SQL_USER:-sa}"
 FREETDSKIT_SQL_PASSWORD="${FREETDSKIT_SQL_PASSWORD:-YourStrongPassword1}"
-FREETDSKIT_SQL_SERVER="localhost"
+FREETDSKIT_SQL_SERVER="${FREETDSKIT_SQL_SERVER:-localhost}"
 FREETDSKIT_SQL_PORT="${FREETDSKIT_SQL_PORT:-1438}"
 FREETDSKIT_SQL_DB="FreeTDSKitTestDB"
+FREETDSKIT_RUN_INTEGRATION_TESTS="${FREETDSKIT_RUN_INTEGRATION_TESTS:-1}"
 
 export FREETDSKIT_SQL_SERVER
 export FREETDSKIT_SQL_PORT
 export FREETDSKIT_SQL_USER
 export FREETDSKIT_SQL_PASSWORD
 export FREETDSKIT_SQL_DB
+export FREETDSKIT_RUN_INTEGRATION_TESTS
+
+SQLCMD="/opt/homebrew/bin/sqlcmd"
 
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -29,6 +33,10 @@ check_brew_package() {
 # Check for required packages
 check_brew_package "docker"
 check_brew_package "sqlcmd"
+
+sqlcmd_run() {
+    "$SQLCMD" -b -C -S "$FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT" -U "$FREETDSKIT_SQL_USER" -P "$FREETDSKIT_SQL_PASSWORD" "$@"
+}
 
 # Check if Docker is running
 if ! docker info &>/dev/null; then
@@ -57,8 +65,8 @@ if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
     echo "waiting for SQL Server to be ready..."
     echo "testing with: sqlcmd -S $FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT -U $FREETDSKIT_SQL_USER -P $FREETDSKIT_SQL_PASSWORD"
     SQL_SERVER_READY=false
-    for _ in {1..30}; do  # Check for up to 30 seconds
-if /opt/homebrew/bin/sqlcmd -S $FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT -U "$FREETDSKIT_SQL_USER" -P "$FREETDSKIT_SQL_PASSWORD" -Q "SELECT 1" &>/dev/null; then
+    for _ in {1..90}; do
+        if sqlcmd_run -Q "SELECT 1" &>/dev/null; then
             echo "✅ SQL Server is ready on $FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT"
             SQL_SERVER_READY=true
             break
@@ -76,17 +84,28 @@ else
     exit 1
 fi
 
-echo "Checking for  db... with "
-if /opt/homebrew/bin/sqlcmd -S $FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT -U "$FREETDSKIT_SQL_USER" -P "$FREETDSKIT_SQL_PASSWORD" -Q "SELECT name FROM sys.databases WHERE name = '${FREETDSKIT_SQL_DB}'" -h -1 | grep -q "${FREETDSKIT_SQL_DB}"; then
-    echo "✅ Database '${FREETDSKIT_SQL_DB}' already exists. Skipping setup."
+echo "Checking database and schema..."
+
+DB_EXISTS=false
+if sqlcmd_run -d master -Q "SET NOCOUNT ON; SELECT name FROM sys.databases WHERE name = '${FREETDSKIT_SQL_DB}'" -h -1 | grep -q "${FREETDSKIT_SQL_DB}"; then
+    DB_EXISTS=true
+fi
+
+SCHEMA_READY=false
+if [ "$DB_EXISTS" = true ] && sqlcmd_run -d "$FREETDSKIT_SQL_DB" -Q "SET NOCOUNT ON; SELECT CASE WHEN OBJECT_ID(N'dbo.DataTypeTest', N'U') IS NOT NULL AND OBJECT_ID(N'dbo.UpdateTableTest', N'U') IS NOT NULL THEN 1 ELSE 0 END" -h -1 | grep -q "^1$"; then
+    SCHEMA_READY=true
+fi
+
+if [ "$SCHEMA_READY" = true ]; then
+    echo "✅ Database '${FREETDSKIT_SQL_DB}' and required tables already exist. Skipping setup."
 else
-    echo "‼️ Database '${FREETDSKIT_SQL_DB}' does not exist. Running db-setup.sql to create and populate the database..."
-    /opt/homebrew/bin/sqlcmd -S $FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT -U "$FREETDSKIT_SQL_USER" -P "$FREETDSKIT_SQL_PASSWORD" -i "$SCRIPT_DIR/db-setup.sql"
-        echo "✅ Database and tables created"
+    echo "‼️ Database '${FREETDSKIT_SQL_DB}' is missing required schema. Running db-setup.sql..."
+    sqlcmd_run -d master -i "$SCRIPT_DIR/db-setup.sql"
+    echo "✅ Database and tables created"
 fi
 # Run the tests
 echo "🧪 Running integration tests..."
-swift test --disable-swift-testing --enable-xctest -Xswiftc -DINTEGRATION_TESTS
+swift test --disable-swift-testing --enable-xctest --filter FreeTDSKitIntegrationTests
 echo "✅ Integration tests passed!"
 
 # Stop Docker services after tests
