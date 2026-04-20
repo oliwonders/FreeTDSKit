@@ -1,6 +1,6 @@
 services:
   sqlserver:
-    image: mcr.microsoft.com/azure-sql-edge
+    image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${FREETDSKIT_SQL_PASSWORD}
@@ -8,7 +8,7 @@ services:
     ports:
       - "${FREETDSKIT_SQL_PORT}:1433"
     healthcheck:
-        test: /opt/mssql-tools/bin/sqlcmd -C -S localhost,1433 -U ${FREETDSKIT_SQL_USER} -P "${FREETDSKIT_SQL_PASSWORD}" -Q "SELECT 1" || exit 1
+        test: /opt/mssql-tools18/bin/sqlcmd -C -S localhost,1433 -U ${FREETDSKIT_SQL_USER} -P "${FREETDSKIT_SQL_PASSWORD}" -Q "SELECT 1" || exit 1
         interval: 10s
         timeout: 3s
         retries: 20
