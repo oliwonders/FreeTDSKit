@@ -12,9 +12,6 @@ let package = Package(
             targets: ["FreeTDSKit"]
         )
     ],
-    dependencies: [
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0")
-    ],
     targets: [
         .target(
             name: "CFreeTDS",
@@ -37,7 +34,6 @@ let package = Package(
             name: "FreeTDSKit",
             dependencies: [
                 "CFreeTDS",
-                .product(name: "Logging", package: "swift-log"),
             ]
         ),
         .testTarget(

@@ -15,7 +15,7 @@ FreeTDSKit is a Swift wrapper around the FreeTDS DB-Library client, exposing a S
 
 ## How Linking Works
 
-This package does not expect consumers to install FreeTDS separately at build time. Instead, the package vendors the important C artifacts inside `Sources/CFreeTDS`:
+This package does not expect user to install FreeTDS separately at build time. Instead, the package vendors the important C artifacts inside `Sources/CFreeTDS`:
 
 - FreeTDS headers under `Sources/CFreeTDS/include`
 - `libsybdb.a`
@@ -36,7 +36,13 @@ This package does not expect consumers to install FreeTDS separately at build ti
 
 That means the package resolves as a self-contained SwiftPM dependency as long as those vendored archives and headers are kept in sync.
 
-## Usage
+## Client Usage
+
+First add FreeTDSKit to your application in Xcode or run this:
+
+```bash
+swift package add https://github.com/oliwonders/FreeTDSKit.git
+```
 
 ```swift
 import FreeTDSKit
