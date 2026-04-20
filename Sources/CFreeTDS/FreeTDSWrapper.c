@@ -168,6 +168,11 @@ RowData* fetchResultsWithType(DBPROCESS* dbproc, int* rowCount) {
     }
 
     *rowCount = current_row;
+    if (rows == NULL) {
+        // DML (INSERT/UPDATE/DELETE) returns no rows — allocate a sentinel so
+        // callers can distinguish success-with-no-rows from a real failure (NULL).
+        rows = malloc(1);
+    }
     return rows;
 }
 
