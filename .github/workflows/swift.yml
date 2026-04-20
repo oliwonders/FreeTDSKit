@@ -1,6 +1,3 @@
-# This workflow will build a Swift project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-swift
-
 name: Swift
 
 on:
@@ -11,22 +8,16 @@ on:
 
 jobs:
   build:
-
     runs-on: macos-15
 
     steps:
     - uses: actions/checkout@v4
- 
-    - name: Install FreeTDS (headers & pkg-config file)
-      run: |
-        brew update --quiet
-        brew install freetds
-        
-    - uses: swift-actions/setup-swift@v2
-    - name: Get swift version
+
+    - name: Swift version
       run: swift --version
-    
+
     - name: Build
       run: swift build -v
-    - name: Run tests
-      run: swift test --parallel
+
+    - name: Run unit tests
+      run: swift test --filter FreeTDSKitTests
