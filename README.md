@@ -69,6 +69,7 @@ do {
     print(error)
     // e.g. "Query execution failed: Msg 208, Level 16, State 1, Line 1: Invalid object name 'NonExistentTable'."
 }
+```
 
 ## Integration Tests
 
