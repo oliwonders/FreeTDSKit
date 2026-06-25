@@ -1,6 +1,6 @@
 # FreeTDSKit
 
-FreeTDSKit is a Swift wrapper around the FreeTDS DB-Library client, exposing a Swift-native API for connecting to Microsoft SQL Server and executing queries without pushing C types into the public interface.
+FreeTDSKit is a Swift wrapper around the [FreeTDS](https://github.com/FreeTDS/freetds) DB-Library client, exposing a Swift-native API for connecting to Microsoft SQL Server and executing queries without pushing C types into the public interface.
 
 > The package is still evolving, but the current layout is intentionally simple: SwiftPM builds a small C shim, links vendored static libraries, and exposes the result through a Swift actor-based API.
 
@@ -76,7 +76,7 @@ On SQL failures, the thrown error includes the detailed SQL Server message captu
 
 ## Upgrading FreeTDS
 
-The upgrade workflow is based on vendoring a new static FreeTDS build into `Sources/CFreeTDS`.
+The upgrade workflow is based on vendoring a new static [FreeTDS](https://github.com/FreeTDS/freetds) build into `Sources/CFreeTDS`.
 
 ### 1. Update the version in the build script
 
