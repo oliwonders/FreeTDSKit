@@ -83,7 +83,7 @@ The upgrade workflow is based on vendoring a new static [FreeTDS](https://github
 Edit [Support/buildandlinkfreetds.sh](/Users/david/dev/oliwonders/FreeTDSKit/Support/buildandlinkfreetds.sh) and change:
 
 ```bash
-FREETDS_VERSION="1.5.2"
+FREETDS_VERSION="1.5.15"
 ```
 
 ### 2. Rebuild and re-vendor FreeTDS

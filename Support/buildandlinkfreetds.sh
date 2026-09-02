@@ -3,7 +3,7 @@ set -euo pipefail
 
 MACOSX_DEPLOYMENT_TARGET="15.0"
 OPENSSL_VERSION="3.3.3"
-FREETDS_VERSION="1.5.17"
+FREETDS_VERSION="1.5.16"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"

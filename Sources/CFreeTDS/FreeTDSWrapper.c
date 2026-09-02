@@ -66,15 +66,18 @@ DBPROCESS* connectToDatabase(const char* server, const char* user, const char* p
     DBSETLUSER(login, user);
     DBSETLPWD(login, password);
     DBSETLAPP(login, "FreeTDSWrapper");
+    // Select the target database via the login packet rather than a post-connect
+    // `USE <database>` (dbuse). Azure SQL Database does not support the USE
+    // statement, so the database must be specified at login time. This also
+    // works for on-prem SQL Server.
+    if (database != NULL && database[0] != '\0') {
+        DBSETLDBNAME(login, database);
+    }
     dberrhandle(errorHandler);
     dbmsghandle(messageHandler);
     dbproc = dbopen(login, server);
     dbloginfree(login);
     if (dbproc == NULL) {
-        return NULL;
-    }
-    if (dbuse(dbproc, database) == FAIL) {
-        dbclose(dbproc);
         return NULL;
     }
     return dbproc;
