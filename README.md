@@ -104,6 +104,37 @@ Errors raised while a query is producing rows (an invalid object name, a stateme
 that fails partway through a batch) are thrown from the row stream rather than
 ending the sequence early.
 
+### Timeouts
+
+```swift
+let config = ConnectionConfiguration(
+    host: "your_server",
+    username: "your_user",
+    password: "your_password",
+    database: "your_database",
+    loginTimeout: 15,   // seconds to wait for the login
+    queryTimeout: 30    // seconds a query may run; 0 waits indefinitely
+)
+```
+
+`loginTimeout` defaults to 15 seconds. Anything much tighter is a poor fit for
+Azure SQL: a serverless database that has auto-paused is resumed *by* the
+connection attempt, and the resume takes far longer than a warm login. Give up
+too early and the failure arrives as a bare `DB-Lib error 20002 (severity 9):
+TDS server connection failed`, with no server message attached, because the
+connection never got far enough for SQL Server to say anything.
+
+`queryTimeout` defaults to 0, DB-Library's own default, which waits
+indefinitely. Set it if a hung query should fail rather than block forever.
+
+The two are not stored the same way, which matters under concurrency:
+`queryTimeout` is set on the connection itself, but DB-Library keeps the login
+timeout process-wide and reads it when a connection opens, so connections opened
+concurrently with different `loginTimeout` values race and the last writer wins.
+
+The older `timeout` parameter is deprecated in favour of `loginTimeout`, which
+is what it always meant.
+
 ## Upgrading FreeTDS And OpenSSL
 
 The upgrade workflow is based on vendoring new static [FreeTDS](https://github.com/FreeTDS/freetds) and [OpenSSL](https://openssl.org) builds into `Sources/CFreeTDS`. FreeTDS links OpenSSL for TLS, so the two archives are rebuilt together and travel as a set.

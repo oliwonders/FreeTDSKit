@@ -45,6 +45,12 @@ const char* getDBVersion(void);
 int initializeDBLibrary(void);
 DBPROCESS* connectToDatabase(const char* server, const char* user, const char* password, const char* database, const int timeout);
 int executeQuery(DBPROCESS* dbproc, const char* query);
+
+// Bound how long a query on this connection may run, in seconds. Applies to
+// this DBPROCESS only, unlike dbsettime(), which is process-global. A value of
+// 0 or less leaves DB-Library's default in place, which waits indefinitely.
+// Returns 0 on success.
+int setQueryTimeout(DBPROCESS* dbproc, int seconds);
 RowData* fetchResultsWithType(DBPROCESS* dbproc, int* rowCount);
 void freeFetchedResults(RowData* rows, int rowCount);
 void closeConnection(DBPROCESS* dbproc);

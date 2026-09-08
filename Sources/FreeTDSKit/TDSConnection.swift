@@ -61,6 +61,19 @@ private func lastTdsFailureReason(fallback: String) -> String {
     return reason.isEmpty ? fallback : reason
 }
 
+/// Default seconds to wait for a login to complete.
+///
+/// Fifteen rather than something tighter because a serverless Azure SQL
+/// database that has auto-paused is resumed *by* the connection attempt, and
+/// the resume takes appreciably longer than a warm login. A short timeout turns
+/// that into an opaque "TDS server connection failed" with no server message
+/// attached, since the failure happens before login.
+public let defaultLoginTimeout = 15
+
+/// Default seconds a query may run: 0, meaning wait indefinitely, which is
+/// DB-Library's own default.
+public let defaultQueryTimeout = 0
+
 /// Configuration for connecting to a TDS database.
 public struct ConnectionConfiguration: Sendable {
     /// Server hostname or IP address.
@@ -73,8 +86,21 @@ public struct ConnectionConfiguration: Sendable {
     public var password: String
     /// Database name.
     public var database: String
-    /// Connection timeout in seconds.
-    public var timeout: Int
+    /// Seconds to wait for the login to complete.
+    ///
+    /// Note that DB-Library stores this process-wide and reads it when the
+    /// connection is opened, so connections opened concurrently with different
+    /// values race and the last writer wins.
+    public var loginTimeout: Int
+    /// Seconds a query may run before DB-Library gives up on it. 0 waits
+    /// indefinitely. Unlike `loginTimeout`, this is per connection.
+    public var queryTimeout: Int
+
+    @available(*, deprecated, renamed: "loginTimeout")
+    public var timeout: Int {
+        get { loginTimeout }
+        set { loginTimeout = newValue }
+    }
 
     /// Create an empty default configuration.
     public init() {
@@ -83,7 +109,8 @@ public struct ConnectionConfiguration: Sendable {
         self.username = ""
         self.password = ""
         self.database = ""
-        self.timeout = 5
+        self.loginTimeout = defaultLoginTimeout
+        self.queryTimeout = defaultQueryTimeout
     }
 
     /// Create a configuration with host, port, credentials, and database name.
@@ -93,14 +120,38 @@ public struct ConnectionConfiguration: Sendable {
         username: String,
         password: String,
         database: String,
-        timeout: Int = 5
+        loginTimeout: Int = defaultLoginTimeout,
+        queryTimeout: Int = defaultQueryTimeout
     ) {
         self.host = host
         self.port = port
         self.username = username
         self.password = password
         self.database = database
-        self.timeout = timeout
+        self.loginTimeout = loginTimeout
+        self.queryTimeout = queryTimeout
+    }
+
+    @available(
+        *, deprecated,
+        renamed: "init(host:port:username:password:database:loginTimeout:queryTimeout:)"
+    )
+    public init(
+        host: String,
+        port: Int = 1433,
+        username: String,
+        password: String,
+        database: String,
+        timeout: Int
+    ) {
+        self.init(
+            host: host,
+            port: port,
+            username: username,
+            password: password,
+            database: database,
+            loginTimeout: timeout
+        )
     }
 }
 
@@ -120,17 +171,46 @@ public actor TDSConnection {
             username: configuration.username,
             password: configuration.password,
             database: configuration.database,
-            timeout: configuration.timeout
+            loginTimeout: configuration.loginTimeout,
+            queryTimeout: configuration.queryTimeout
         )
     }
 
-    /// Initialize a connection using raw parameters.
+    @available(
+        *, deprecated,
+        renamed: "init(server:username:password:database:loginTimeout:queryTimeout:)"
+    )
     public init(
         server: String,
         username: String,
         password: String,
         database: String,
-        timeout: Int = 5
+        timeout: Int
+    ) throws {
+        try self.init(
+            server: server,
+            username: username,
+            password: password,
+            database: database,
+            loginTimeout: timeout
+        )
+    }
+
+    /// Initialize a connection using raw parameters.
+    ///
+    /// - Parameters:
+    ///   - loginTimeout: seconds to wait for the login. DB-Library keeps this
+    ///     process-wide and reads it when the connection opens, so concurrent
+    ///     opens with different values race.
+    ///   - queryTimeout: seconds a query on this connection may run; 0 waits
+    ///     indefinitely.
+    public init(
+        server: String,
+        username: String,
+        password: String,
+        database: String,
+        loginTimeout: Int = defaultLoginTimeout,
+        queryTimeout: Int = defaultQueryTimeout
     ) throws {
         let dbInit = initializeDBLibrary()
         if dbInit != 0 {
@@ -144,11 +224,21 @@ public actor TDSConnection {
             username,
             password,
             database,
-            Int32(timeout)
+            Int32(loginTimeout)
         )
-        if self.connection == nil {
+        guard let connection = self.connection else {
             throw TDSConnectionError.connectionFailed(
                 reason: lastTdsFailureReason(fallback: "Connection failed"),
+                messages: collectTdsMessages()
+            )
+        }
+        if setQueryTimeout(connection, Int32(queryTimeout)) != 0 {
+            self.connection = nil
+            closeConnection(connection)
+            throw TDSConnectionError.connectionFailed(
+                reason: lastTdsFailureReason(
+                    fallback: "Could not set a query timeout of \(queryTimeout)s"
+                ),
                 messages: collectTdsMessages()
             )
         }

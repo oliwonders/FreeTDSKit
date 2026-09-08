@@ -195,6 +195,26 @@ DBPROCESS* connectToDatabase(const char* server, const char* user, const char* p
     return dbproc;
 }
 
+// Bound the time a query on this connection may run.
+//
+// dbsetopt(DBSETTIME) sets the timeout on this DBPROCESS alone. The obvious
+// alternative, dbsettime(), writes a process-global value and pushes it onto
+// every connection that has not set its own, so one caller's patience would
+// become everybody's.
+int setQueryTimeout(DBPROCESS* dbproc, int seconds) {
+    if (dbproc == NULL) {
+        return -1;
+    }
+    // DB-Library treats a non-positive timeout as "wait indefinitely", and
+    // dbsetopt rejects it, so leave the default in place instead.
+    if (seconds <= 0) {
+        return 0;
+    }
+    char param[32];
+    snprintf(param, sizeof(param), "%d", seconds);
+    return dbsetopt(dbproc, DBSETTIME, param, -1) == SUCCEED ? 0 : -1;
+}
+
 // Execute a query
 int executeQuery(DBPROCESS* dbproc, const char* query) {
     clearTdsMessages();

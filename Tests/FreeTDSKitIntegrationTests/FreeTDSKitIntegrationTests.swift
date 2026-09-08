@@ -93,7 +93,7 @@ import XCTest
             configuration.username = "sa"
             configuration.password = "YourStrongPassword1"
             configuration.database = "FreeTDSKitTestDB"
-            configuration.timeout = 10
+            configuration.loginTimeout = 10
 
             do {
                 let dbConnection = try TDSConnection(configuration: configuration)
