@@ -8,7 +8,7 @@ FreeTDSKit is a Swift wrapper around the [FreeTDS](https://github.com/FreeTDS/fr
 
 - `Sources/FreeTDSKit`: Swift API surface, including `TDSConnection`, `SQLResult`, and type mapping.
 - `Sources/CFreeTDS`: C shim plus vendored FreeTDS headers and static libraries.
-- `Support/buildandlinkfreetds.sh`: rebuilds FreeTDS from source and copies the generated headers and `libsybdb.a` into the package.
+- `Support/buildandlinkfreetds.sh`: rebuilds OpenSSL and FreeTDS from source and copies `libsybdb.a`, `libssl.a`, and `libcrypto.a` into the package.
 - `Support/generate_freetds_pc.sh`: generates a Homebrew `freetds.pc` file and symlink for local tooling/Xcode header discovery.
 - `Tests/FreeTDSKitTests`: fast unit tests.
 - `Tests/FreeTDSKitIntegrationTests`: Docker-backed SQL Server integration tests.
@@ -34,7 +34,18 @@ This package does not expect user to install FreeTDS separately at build time. I
 ])
 ```
 
-That means the package resolves as a self-contained SwiftPM dependency as long as those vendored archives and headers are kept in sync.
+That means the package resolves as a self-contained SwiftPM dependency as long as those vendored archives and headers are kept in sync. The current archives are FreeTDS 1.5.19 and OpenSSL 3.5.8, built for macOS 15.0.
+
+Because those flags are `-L` plus `-l`, the linker picks the *first* matching library on its search path, and it prefers a `.dylib` over a `.a` in the same directory. If your environment exports `LIBRARY_PATH` (a Homebrew setup commonly sets `/opt/homebrew/lib`), a system-wide FreeTDS install can win over the vendored archive and you will silently link against that instead:
+
+```bash
+$ otool -L .build/debug/YourApp | grep sybdb
+    /opt/homebrew/opt/freetds/lib/libsybdb.5.dylib   # not the vendored 1.5.19
+
+$ env -u LIBRARY_PATH swift build                    # links the vendored archive
+```
+
+`FreeTDSKit.getFreeTDSVersion()` is the quickest way to tell which one you got.
 
 ## Client Usage
 
@@ -96,19 +107,22 @@ Errors raised while a query is producing rows (an invalid object name, a stateme
 that fails partway through a batch) are thrown from the row stream rather than
 ending the sequence early.
 
-## Upgrading FreeTDS
+## Upgrading FreeTDS And OpenSSL
 
-The upgrade workflow is based on vendoring a new static [FreeTDS](https://github.com/FreeTDS/freetds) build into `Sources/CFreeTDS`.
+The upgrade workflow is based on vendoring new static [FreeTDS](https://github.com/FreeTDS/freetds) and [OpenSSL](https://openssl.org) builds into `Sources/CFreeTDS`. FreeTDS links OpenSSL for TLS, so the two archives are rebuilt together and travel as a set.
 
-### 1. Update the version in the build script
+### 1. Update the versions in the build script
 
-Edit [Support/buildandlinkfreetds.sh](/Users/david/dev/oliwonders/FreeTDSKit/Support/buildandlinkfreetds.sh) and change:
+Edit [Support/buildandlinkfreetds.sh](/Users/david/dev/oliwonders/FreeTDSKit/Support/buildandlinkfreetds.sh) and change either or both of:
 
 ```bash
+OPENSSL_VERSION="3.5.8"
 FREETDS_VERSION="1.5.19"
 ```
 
-### 2. Rebuild and re-vendor FreeTDS
+Prefer an OpenSSL LTS release (the 3.5 series is supported into 2030) over the newest one, since a vendored archive only gets refreshed when someone runs this script.
+
+### 2. Rebuild and re-vendor
 
 Run:
 
@@ -118,13 +132,13 @@ Run:
 
 What that script does:
 
-1. Downloads the selected FreeTDS release tarball.
-2. Configures it with `--disable-shared --enable-static`.
-3. Builds and installs it into `Support/build/static-freetds`.
-4. Copies generated headers into `Sources/CFreeTDS/include`.
-5. Copies `libsybdb.a` into `Sources/CFreeTDS/`.
+1. Downloads the selected OpenSSL and FreeTDS release tarballs.
+2. Configures both static-only (`no-shared` / `--disable-shared --enable-static`), with FreeTDS pointed at the OpenSSL it just built.
+3. Installs them into `Support/build/static-openssl` and `Support/build/static-freetds`.
+4. Copies `libsybdb.a`, `libssl.a`, and `libcrypto.a` into `Sources/CFreeTDS/`.
+5. Prints the deployment target of each archive, which should match the platform in `Package.swift`.
 
-Important limitation: the script only refreshes FreeTDS itself. This repo also vendors `libssl.a` and `libcrypto.a`, so if the new FreeTDS build needs different OpenSSL artifacts you need to refresh those archives separately and keep them compatible with the new `libsybdb.a`.
+Important limitation: the script does **not** refresh the vendored headers in `Sources/CFreeTDS/include`. They rarely change between FreeTDS patch releases -- 1.5.19 installs headers byte-identical to 1.5.16 -- but after a larger jump, diff them against `Support/build/static-freetds/include` and copy over anything that moved. A header that disagrees with `libsybdb.a` is the kind of mismatch that compiles and then misbehaves at runtime.
 
 ### 3. Verify the package still links cleanly
 
@@ -133,6 +147,13 @@ The C target is defined in [Package.swift](/Users/david/dev/oliwonders/FreeTDSKi
 ```bash
 swift build
 swift test
+```
+
+SwiftPM does not treat the vendored `.a` files as build inputs, so an incremental build after re-vendoring will happily report success while the old library is still linked in. Force a relink first:
+
+```bash
+swift package clean     # or: touch Sources/CFreeTDS/FreeTDSWrapper.c
+swift build
 ```
 
 If the new FreeTDS version changes transitive requirements, update the linker flags in `Package.swift` accordingly.
@@ -145,7 +166,7 @@ The package exposes the linked library version via:
 FreeTDSKit.getFreeTDSVersion()
 ```
 
-The unit test suite already exercises that path.
+The unit test suite already exercises that path. Confirm it reports the version you just vendored -- if it reports a different one, the build linked a system copy rather than the archive in this repo (see [How Linking Works](#how-linking-works)).
 
 ## Linking Notes For Local Development
 

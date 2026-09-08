@@ -2,7 +2,7 @@
 set -euo pipefail
 
 MACOSX_DEPLOYMENT_TARGET="15.0"
-OPENSSL_VERSION="3.3.3"
+OPENSSL_VERSION="3.5.8"
 FREETDS_VERSION="1.5.19"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -86,7 +86,9 @@ for lib in libsybdb.a libcrypto.a libssl.a; do
     tmpdir=$(mktemp -d)
     # BSD ar (the one on macOS) has no --output, so extract from inside tmpdir.
     (cd "$tmpdir" && ar -x "$DEST_DIR/$lib") 2>/dev/null || true
-    first_obj=$(find "$tmpdir" -maxdepth 1 -name '*.o' | head -1)
+    # -print -quit rather than a pipe to head: piping into head kills find with
+    # SIGPIPE on a large archive, which pipefail turns into a script failure.
+    first_obj=$(find "$tmpdir" -maxdepth 1 -name '*.o' -print -quit)
     if [ -n "$first_obj" ]; then
         vtool -show-build "$first_obj" 2>/dev/null | grep -E "minos|platform" | tr '\n' ' ' || printf "(unable to read)"
     else
