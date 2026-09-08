@@ -72,7 +72,29 @@ for try await user in connection.query(queryString: "SELECT id, name FROM users"
 await connection.close()
 ```
 
-On SQL failures, the thrown error includes the detailed SQL Server message captured by the C wrapper.
+### Errors
+
+`TDSConnectionError` carries the messages SQL Server sent for the failure, oldest
+first. That order matters: a single failure often produces several messages, with
+the specific cause first and a generic summary after it, so `primaryMessage` is
+the one that explains what actually went wrong.
+
+```swift
+do {
+    let connection = try TDSConnection(configuration: config)
+} catch let error as TDSConnectionError {
+    print(error)
+    // Connection failed: Msg 4060, Level 11, State 2, Line 1: Cannot open database
+    // "demo" requested by the login. The login failed. | Msg 18456, Level 14,
+    // State 1, Line 1: Login failed for user 'admin'.
+
+    if error.primaryMessage?.number == 4060 { /* wrong database, not a bad password */ }
+}
+```
+
+Errors raised while a query is producing rows (an invalid object name, a statement
+that fails partway through a batch) are thrown from the row stream rather than
+ending the sequence early.
 
 ## Upgrading FreeTDS
 

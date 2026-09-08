@@ -10,8 +10,26 @@
 
 #include <sybdb.h>
 
-// Retrieve the most recent error or message text from the TDS library.
+// Retrieve the error text for the most recent operation. When the server
+// reported messages, this is every one of them, oldest first, joined with " | ";
+// otherwise it is the DB-Library error text.
 const char* getLastTdsErrorMessage(void);
+
+// Discard the messages recorded for the previous operation. Called at the start
+// of connect/execute; also safe to call from client code.
+void clearTdsMessages(void);
+
+// Server messages recorded during the most recent operation, oldest first.
+// SQL Server reports the specific cause first and a generic summary afterwards,
+// so index 0 is normally the message that explains the failure.
+int getTdsMessageCount(void);
+long getTdsMessageNumber(int index);
+int getTdsMessageSeverity(int index);
+int getTdsMessageState(int index);
+int getTdsMessageLine(int index);
+const char* getTdsMessageText(int index);
+const char* getTdsMessageServer(int index);
+const char* getTdsMessageProcedure(int index);
 //#include "/opt/homebrew/include/sybdb.h"
 
 // Structure to hold a single row's data

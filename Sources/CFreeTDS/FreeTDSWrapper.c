@@ -12,32 +12,143 @@
 
 #include "FreeTDSWrapper.h"
 
+#define MAX_TDS_MESSAGES 8
+#define TDS_MESSAGE_TEXT_LEN 512
+#define TDS_MESSAGE_NAME_LEN 128
+
+// Severity 11 and above is an actual error; below that the server is sending
+// informational text (PRINT output, "changed database context", and friends).
+#define TDS_MIN_ERROR_SEVERITY 11
+
+typedef struct {
+    long number;
+    int severity;
+    int state;
+    int line;
+    char text[TDS_MESSAGE_TEXT_LEN];
+    char server[TDS_MESSAGE_NAME_LEN];
+    char procedure[TDS_MESSAGE_NAME_LEN];
+} TdsMessage;
+
+// A single failure often produces several messages. SQL Server sends the
+// specific cause first and a generic summary afterwards -- Azure answers a bad
+// database name with "Cannot open database ... requested by the login" followed
+// by "Login failed for user ...". Keeping only the newest message therefore
+// throws away the only one that says what went wrong, so record them all in
+// arrival order and report the whole set.
+static TdsMessage tdsMessages[MAX_TDS_MESSAGES];
+static int tdsMessageCount = 0;   // messages retained (capped at MAX_TDS_MESSAGES)
+static int tdsMessagesSeen = 0;   // messages reported, including any dropped
 static char lastErrorMessage[1024] = "";
-static char lastServerMessage[1024] = "";
+static char combinedMessage[MAX_TDS_MESSAGES * (TDS_MESSAGE_TEXT_LEN + 128) + 64];
+
+static void copyField(char *dest, size_t size, const char *src) {
+    snprintf(dest, size, "%s", src ? src : "");
+}
+
+void clearTdsMessages(void) {
+    tdsMessageCount = 0;
+    tdsMessagesSeen = 0;
+    lastErrorMessage[0] = '\0';
+    combinedMessage[0] = '\0';
+}
 
 // Message handler to capture detailed SQL Server error messages.
 static int messageHandler(DBPROCESS *dbproc, DBINT msgno, int msgstate, int severity,
                           char *msgtext, char *srvname, char *procname, int line) {
-    // Severity >= 11 means an actual error (not informational).
-    // Store in a separate buffer so errorHandler can't overwrite it.
-    if (severity >= 11) {
-        snprintf(lastServerMessage, sizeof(lastServerMessage),
-                 "Msg %ld, Level %d, State %d, Line %d: %s",
-                 (long)msgno, severity, msgstate, line, msgtext);
+    if (severity < TDS_MIN_ERROR_SEVERITY) {
+        return 0;
     }
+    tdsMessagesSeen++;
+    // Once full, keep what we have: the earliest messages are the specific ones.
+    if (tdsMessageCount >= MAX_TDS_MESSAGES) {
+        return 0;
+    }
+    TdsMessage *message = &tdsMessages[tdsMessageCount++];
+    message->number = (long)msgno;
+    message->severity = severity;
+    message->state = msgstate;
+    message->line = line;
+    copyField(message->text, sizeof(message->text), msgtext);
+    copyField(message->server, sizeof(message->server), srvname);
+    copyField(message->procedure, sizeof(message->procedure), procname);
     return 0;
 }
+
 static int errorHandler(DBPROCESS *dbproc, int severity, int dberr, int oserr, char *dberrstr, char *oserrstr) {
     snprintf(lastErrorMessage, sizeof(lastErrorMessage), "DB-Lib error %d (severity %d): %s [%s]", dberr, severity, dberrstr, oserrstr ? oserrstr : "no os error");
     return INT_CANCEL;
 }
 
-// Prefer the SQL Server message (from messageHandler) when available, as it contains
-// the actual error text (e.g. "Incorrect syntax near ','"). Fall back to the DB-Lib
-// wrapper message only when no server message was recorded.
+int getTdsMessageCount(void) { return tdsMessageCount; }
+
+static const TdsMessage* messageAt(int index) {
+    if (index < 0 || index >= tdsMessageCount) { return NULL; }
+    return &tdsMessages[index];
+}
+
+long getTdsMessageNumber(int index) {
+    const TdsMessage *m = messageAt(index);
+    return m ? m->number : 0;
+}
+
+int getTdsMessageSeverity(int index) {
+    const TdsMessage *m = messageAt(index);
+    return m ? m->severity : 0;
+}
+
+int getTdsMessageState(int index) {
+    const TdsMessage *m = messageAt(index);
+    return m ? m->state : 0;
+}
+
+int getTdsMessageLine(int index) {
+    const TdsMessage *m = messageAt(index);
+    return m ? m->line : 0;
+}
+
+const char* getTdsMessageText(int index) {
+    const TdsMessage *m = messageAt(index);
+    return m ? m->text : "";
+}
+
+const char* getTdsMessageServer(int index) {
+    const TdsMessage *m = messageAt(index);
+    return m ? m->server : "";
+}
+
+const char* getTdsMessageProcedure(int index) {
+    const TdsMessage *m = messageAt(index);
+    return m ? m->procedure : "";
+}
+
+// Prefer the SQL Server messages (from messageHandler) when available, as they
+// contain the actual error text (e.g. "Incorrect syntax near ','"). Every
+// message is included, oldest first, because the first one is usually the cause
+// and the later ones the consequence. Fall back to the DB-Lib wrapper message
+// only when the server recorded nothing.
 const char* getLastTdsErrorMessage(void) {
-    if (lastServerMessage[0] != '\0') { return lastServerMessage; }
-    return lastErrorMessage;
+    if (tdsMessageCount == 0) { return lastErrorMessage; }
+
+    size_t offset = 0;
+    for (int i = 0; i < tdsMessageCount; i++) {
+        const TdsMessage *m = &tdsMessages[i];
+        int written = snprintf(combinedMessage + offset, sizeof(combinedMessage) - offset,
+                               "%sMsg %ld, Level %d, State %d, Line %d: %s",
+                               i == 0 ? "" : " | ",
+                               m->number, m->severity, m->state, m->line, m->text);
+        if (written < 0 || (size_t)written >= sizeof(combinedMessage) - offset) {
+            return combinedMessage;
+        }
+        offset += (size_t)written;
+    }
+
+    int dropped = tdsMessagesSeen - tdsMessageCount;
+    if (dropped > 0) {
+        snprintf(combinedMessage + offset, sizeof(combinedMessage) - offset,
+                 " | (%d further message%s suppressed)", dropped, dropped == 1 ? "" : "s");
+    }
+    return combinedMessage;
 }
 
 const char* getDBVersion(void) {
@@ -46,6 +157,8 @@ const char* getDBVersion(void) {
 
 // Initialize DB-Library
 int initializeDBLibrary(void) {
+    dberrhandle(errorHandler);
+    dbmsghandle(messageHandler);
     return dbinit() == SUCCEED ? 0 : -1;
 }
 
@@ -54,8 +167,7 @@ DBPROCESS* connectToDatabase(const char* server, const char* user, const char* p
     LOGINREC *login;
     DBPROCESS *dbproc;
 
-    lastServerMessage[0] = '\0';
-    lastErrorMessage[0] = '\0';
+    clearTdsMessages();
     dbinit();
     login = dblogin();
     if (login == NULL) {
@@ -85,8 +197,7 @@ DBPROCESS* connectToDatabase(const char* server, const char* user, const char* p
 
 // Execute a query
 int executeQuery(DBPROCESS* dbproc, const char* query) {
-    lastServerMessage[0] = '\0';
-    lastErrorMessage[0] = '\0';
+    clearTdsMessages();
     if (dbcmd(dbproc, query) == FAIL) {
         return -1;
     }
@@ -105,6 +216,14 @@ RowData* fetchResultsWithType(DBPROCESS* dbproc, int* rowCount) {
     RowData* rows = NULL;
 
     while ((result_code = dbresults(dbproc)) != NO_MORE_RESULTS) {
+        // Errors raised while producing a result set (a bad object name, a
+        // failing statement later in a batch) arrive here rather than from
+        // dbsqlexec. Returning NULL lets the caller report the server message.
+        if (result_code == FAIL) {
+            freeFetchedResults(rows, current_row);
+            *rowCount = 0;
+            return NULL;
+        }
         if (result_code != SUCCEED) continue;
         int ncols = dbnumcols(dbproc);
         

@@ -11,6 +11,56 @@ import Foundation
 @_silgen_name("getLastTdsErrorMessage")
 private func getLastTdsErrorMessage() -> UnsafePointer<CChar>?
 
+/// A message reported by SQL Server while running an operation.
+///
+/// A single failure usually produces more than one: the server sends the
+/// specific cause first and a generic summary afterwards. `messages.first` is
+/// therefore normally the one that explains what actually went wrong.
+public struct TDSMessage: Sendable, Hashable, CustomStringConvertible {
+    /// Server error number (e.g. 208 for "Invalid object name").
+    public let number: Int
+    /// Severity level; 11 and above is an error.
+    public let severity: Int
+    /// Server-defined state for the error number.
+    public let state: Int
+    /// Line of the batch or procedure that raised the message.
+    public let line: Int
+    /// Human-readable message text.
+    public let text: String
+    /// Name of the server that sent the message, when it supplied one.
+    public let server: String
+    /// Name of the procedure that raised the message, when it came from one.
+    public let procedure: String
+
+    public var description: String {
+        "Msg \(number), Level \(severity), State \(state), Line \(line): \(text)"
+    }
+}
+
+/// Messages recorded by the C layer for the most recent operation, oldest first.
+private func collectTdsMessages() -> [TDSMessage] {
+    (0..<Int(getTdsMessageCount())).map { index in
+        let i = Int32(index)
+        return TDSMessage(
+            number: Int(getTdsMessageNumber(i)),
+            severity: Int(getTdsMessageSeverity(i)),
+            state: Int(getTdsMessageState(i)),
+            line: Int(getTdsMessageLine(i)),
+            text: String(cString: getTdsMessageText(i)),
+            server: String(cString: getTdsMessageServer(i)),
+            procedure: String(cString: getTdsMessageProcedure(i))
+        )
+    }
+}
+
+/// The text of the last failure, falling back to `fallback` when neither the
+/// server nor DB-Library recorded anything.
+private func lastTdsFailureReason(fallback: String) -> String {
+    guard let raw = getLastTdsErrorMessage() else { return fallback }
+    let reason = String(cString: raw)
+    return reason.isEmpty ? fallback : reason
+}
+
 /// Configuration for connecting to a TDS database.
 public struct ConnectionConfiguration: Sendable {
     /// Server hostname or IP address.
@@ -84,10 +134,10 @@ public actor TDSConnection {
     ) throws {
         let dbInit = initializeDBLibrary()
         if dbInit != 0 {
-            let msg =
-                getLastTdsErrorMessage().map { String(cString: $0) }
-                ?? "DB init failed"
-            throw TDSConnectionError.connectionFailed(reason: msg)
+            throw TDSConnectionError.connectionFailed(
+                reason: lastTdsFailureReason(fallback: "DB init failed"),
+                messages: collectTdsMessages()
+            )
         }
         self.connection = connectToDatabase(
             server,
@@ -97,10 +147,10 @@ public actor TDSConnection {
             Int32(timeout)
         )
         if self.connection == nil {
-            let msg =
-                getLastTdsErrorMessage().map { String(cString: $0) }
-                ?? "Connection failed"
-            throw TDSConnectionError.connectionFailed(reason: msg)
+            throw TDSConnectionError.connectionFailed(
+                reason: lastTdsFailureReason(fallback: "Connection failed"),
+                messages: collectTdsMessages()
+            )
         }
     }
 
@@ -116,16 +166,16 @@ public actor TDSConnection {
             let success = executeQuery(conn, queryString)
             if success != 0 {
                 throw TDSConnectionError.queryExecutionFailed(
-                    reason: getLastTdsErrorMessage().map { String(cString: $0) }
-                        ?? ""
+                    reason: lastTdsFailureReason(fallback: "Query failed"),
+                    messages: collectTdsMessages()
                 )
             }
 
             var rowCount: Int32 = 0
             guard let cRows = fetchResultsWithType(conn, &rowCount) else {
                 throw TDSConnectionError.queryExecutionFailed(
-                    reason: getLastTdsErrorMessage().map { String(cString: $0) }
-                        ?? ""
+                    reason: lastTdsFailureReason(fallback: "Query failed"),
+                    messages: collectTdsMessages()
                 )
             }
             defer { freeFetchedResults(cRows, rowCount) }
@@ -210,12 +260,10 @@ public actor TDSConnection {
                 }
                 let conn = OpaquePointer(bitPattern: connRaw)!
                 guard executeQuery(conn, query) == 0 else {
-                    let msg =
-                        getLastTdsErrorMessage().map { String(cString: $0) }
-                        ?? "Query failed"
                     continuation.finish(
                         throwing: TDSConnectionError.queryExecutionFailed(
-                            reason: msg
+                            reason: lastTdsFailureReason(fallback: "Query failed"),
+                            messages: collectTdsMessages()
                         )
                     )
                     return
@@ -223,12 +271,10 @@ public actor TDSConnection {
 
                 var rowCount: Int32 = 0
                 guard let cRows = fetchResultsWithType(conn, &rowCount) else {
-                    let msg =
-                        getLastTdsErrorMessage().map { String(cString: $0) }
-                        ?? "Query failed"
                     continuation.finish(
                         throwing: TDSConnectionError.queryExecutionFailed(
-                            reason: msg
+                            reason: lastTdsFailureReason(fallback: "Query failed"),
+                            messages: collectTdsMessages()
                         )
                     )
                     return
@@ -319,9 +365,9 @@ public actor TDSConnection {
             Task.detached(priority: .userInitiated) {
                 defer { continuation.finish() }
                 let decoder = JSONDecoder()
-                for try await row in base {
-                    if Task.isCancelled { break }
-                    do {
+                do {
+                    for try await row in base {
+                        if Task.isCancelled { break }
                         let jsonDict = row.reduce(into: [String: Any]()) {
                             acc,
                             kv in
@@ -333,10 +379,12 @@ public actor TDSConnection {
                         )
                         let model = try decoder.decode(T.self, from: data)
                         continuation.yield(model)
-                    } catch {
-                        continuation.finish(throwing: error)
-                        return
                     }
+                } catch {
+                    // Covers both decoding failures and errors surfaced by the
+                    // underlying row stream; without this the query error would
+                    // be swallowed and the sequence would end looking empty.
+                    continuation.finish(throwing: error)
                 }
             }
         }
@@ -344,16 +392,30 @@ public actor TDSConnection {
 }
 
 public enum TDSConnectionError: Error, CustomStringConvertible, LocalizedError {
-    case connectionFailed(reason: String)
+    case connectionFailed(reason: String, messages: [TDSMessage] = [])
     case notConnected
-    case queryExecutionFailed(reason: String)
+    case queryExecutionFailed(reason: String, messages: [TDSMessage] = [])
+
+    /// Every message the server reported for the failure, oldest first.
+    /// The first entry is normally the specific cause; later ones are the
+    /// generic summaries the server appends after it.
+    public var messages: [TDSMessage] {
+        switch self {
+        case .connectionFailed(_, let messages): return messages
+        case .queryExecutionFailed(_, let messages): return messages
+        case .notConnected: return []
+        }
+    }
+
+    /// The most specific message the server reported, when there was one.
+    public var primaryMessage: TDSMessage? { messages.first }
 
     public var description: String {
         switch self {
-        case .connectionFailed(let reason):
+        case .connectionFailed(let reason, _):
             return "Connection failed: \(reason)"
         case .notConnected: return "Not connected to the database."
-        case .queryExecutionFailed(let reason):
+        case .queryExecutionFailed(let reason, _):
             return "Query execution failed: \(reason)"
         }
     }
