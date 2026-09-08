@@ -77,6 +77,18 @@ static int messageHandler(DBPROCESS *dbproc, DBINT msgno, int msgstate, int seve
 
 static int errorHandler(DBPROCESS *dbproc, int severity, int dberr, int oserr, char *dberrstr, char *oserrstr) {
     snprintf(lastErrorMessage, sizeof(lastErrorMessage), "DB-Lib error %d (severity %d): %s [%s]", dberr, severity, dberrstr, oserrstr ? oserrstr : "no os error");
+
+    // A query that outran its timeout should cost the caller that query, not
+    // the connection. INT_TIMEOUT has db-lib cancel the running command on the
+    // server and return FAIL while leaving the DBPROCESS usable, where
+    // INT_CANCEL returns FAIL and marks the connection dead -- every later
+    // query on it then fails with "DBPROCESS is dead or not enabled".
+    //
+    // db-lib accepts INT_TIMEOUT for SYBETIME alone and treats it as INT_EXIT
+    // for anything else, so this stays a special case for that one error.
+    if (dberr == SYBETIME) {
+        return INT_TIMEOUT;
+    }
     return INT_CANCEL;
 }
 

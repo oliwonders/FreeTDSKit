@@ -127,6 +127,11 @@ connection never got far enough for SQL Server to say anything.
 `queryTimeout` defaults to 0, DB-Library's own default, which waits
 indefinitely. Set it if a hung query should fail rather than block forever.
 
+Exceeding it costs you the query, not the connection: db-lib cancels the running
+command on the server and the call throws, and the same connection is ready for
+the next query. So a runaway `SELECT *` over a large spatial table can be cut
+off without taking down the connection everything else is using.
+
 The two are not stored the same way, which matters under concurrency:
 `queryTimeout` is set on the connection itself, but DB-Library keeps the login
 timeout process-wide and reads it when a connection opens, so connections opened
