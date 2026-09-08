@@ -26,26 +26,23 @@ This package does not expect user to install FreeTDS separately at build time. I
 
 ```swift
 .unsafeFlags([
-    "-L\(Context.packageDirectory)/Sources/CFreeTDS",
-    "-lsybdb",
-    "-lssl",
-    "-lcrypto",
+    "\(Context.packageDirectory)/Sources/CFreeTDS/libsybdb.a",
+    "\(Context.packageDirectory)/Sources/CFreeTDS/libssl.a",
+    "\(Context.packageDirectory)/Sources/CFreeTDS/libcrypto.a",
     "-liconv",
 ])
 ```
 
 That means the package resolves as a self-contained SwiftPM dependency as long as those vendored archives and headers are kept in sync. The current archives are FreeTDS 1.5.19 and OpenSSL 3.5.8, built for macOS 15.0.
 
-Because those flags are `-L` plus `-l`, the linker picks the *first* matching library on its search path, and it prefers a `.dylib` over a `.a` in the same directory. If your environment exports `LIBRARY_PATH` (a Homebrew setup commonly sets `/opt/homebrew/lib`), a system-wide FreeTDS install can win over the vendored archive and you will silently link against that instead:
+The archives are named by full path deliberately. The earlier form, `-L` plus `-lsybdb`, made the linker search: it takes the first match on the path and prefers a `.dylib` over a `.a`, so an environment that exports `LIBRARY_PATH` -- a Homebrew setup commonly adds `/opt/homebrew/lib` -- would link a system-wide FreeTDS over the vendored archive, silently and with no diagnostic:
 
 ```bash
 $ otool -L .build/debug/YourApp | grep sybdb
-    /opt/homebrew/opt/freetds/lib/libsybdb.5.dylib   # not the vendored 1.5.19
-
-$ env -u LIBRARY_PATH swift build                    # links the vendored archive
+    /opt/homebrew/opt/freetds/lib/libsybdb.5.dylib   # the system copy, not this repo's
 ```
 
-`FreeTDSKit.getFreeTDSVersion()` is the quickest way to tell which one you got.
+A full path leaves nothing to search, so that cannot happen. If you ever need to check what a build actually linked, `otool -L` should show no `libsybdb`/`libssl`/`libcrypto` entries at all -- they are static -- and `FreeTDSKit.getFreeTDSVersion()` should report the version vendored here.
 
 ## Client Usage
 
