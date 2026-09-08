@@ -3,7 +3,7 @@ set -euo pipefail
 
 MACOSX_DEPLOYMENT_TARGET="15.0"
 OPENSSL_VERSION="3.3.3"
-FREETDS_VERSION="1.5.16"
+FREETDS_VERSION="1.5.19"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
@@ -50,7 +50,7 @@ echo "==> Building FreeTDS $FREETDS_VERSION for macOS $MACOSX_DEPLOYMENT_TARGET 
 cd "$BUILD_DIR"
 
 if [ ! -f "freetds-${FREETDS_VERSION}.tar.gz" ]; then
-    curl -LO "ftp://ftp.freetds.org/pub/freetds/stable/freetds-${FREETDS_VERSION}.tar.gz"
+    curl -LO "https://www.freetds.org/files/stable/freetds-${FREETDS_VERSION}.tar.gz"
 fi
 rm -rf "freetds-${FREETDS_VERSION}"
 tar xzf "freetds-${FREETDS_VERSION}.tar.gz"
@@ -84,10 +84,13 @@ for lib in libsybdb.a libcrypto.a libssl.a; do
     echo -n "  $lib: "
     # Extract one object and check its version
     tmpdir=$(mktemp -d)
-    ar -x "$DEST_DIR/$lib" --output "$tmpdir" 2>/dev/null || true
-    first_obj=$(ls "$tmpdir"/*.o 2>/dev/null | head -1)
+    # BSD ar (the one on macOS) has no --output, so extract from inside tmpdir.
+    (cd "$tmpdir" && ar -x "$DEST_DIR/$lib") 2>/dev/null || true
+    first_obj=$(find "$tmpdir" -maxdepth 1 -name '*.o' | head -1)
     if [ -n "$first_obj" ]; then
-        vtool -show-build "$first_obj" 2>/dev/null | grep -E "minos|platform" | tr '\n' ' ' || echo "(unable to read)"
+        vtool -show-build "$first_obj" 2>/dev/null | grep -E "minos|platform" | tr '\n' ' ' || printf "(unable to read)"
+    else
+        printf "(no object files extracted)"
     fi
     echo ""
     rm -rf "$tmpdir"
