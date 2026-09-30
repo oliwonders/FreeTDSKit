@@ -1,5 +1,0 @@
-module FreeTDS [system] {
-	header "sybdb.h" //not ideal, but xcode cannot find sybdb.h unless it's specific
-	link "sybdb"
-	export *
-}

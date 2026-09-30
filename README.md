@@ -2,47 +2,43 @@
 
 FreeTDSKit is a Swift wrapper around the [FreeTDS](https://github.com/FreeTDS/freetds) DB-Library client, exposing a Swift-native API for connecting to Microsoft SQL Server and executing queries without pushing C types into the public interface.
 
-> The package is still evolving, but the current layout is intentionally simple: SwiftPM builds a small C shim, links vendored static libraries, and exposes the result through a Swift actor-based API.
+> The package is still evolving, but the current layout is intentionally simple: SwiftPM builds a small C shim, links a vendored static XCFramework, and exposes the result through a Swift actor-based API.
 
 ## What Is In The Repo
 
 - `Sources/FreeTDSKit`: Swift API surface, including `TDSConnection`, `SQLResult`, and type mapping.
-- `Sources/CFreeTDS`: C shim plus vendored FreeTDS headers and static libraries.
-- `Support/buildandlinkfreetds.sh`: rebuilds OpenSSL and FreeTDS from source and copies `libsybdb.a`, `libssl.a`, and `libcrypto.a` into the package.
+- `Sources/CFreeTDS`: the C shim (`FreeTDSWrapper.c` / `.h`).
+- `Frameworks/FreeTDS.xcframework`: FreeTDS and OpenSSL as one static, universal (arm64 + x86_64) archive, with the FreeTDS headers.
+- `Support/buildandlinkfreetds.sh`: rebuilds OpenSSL and FreeTDS from source for both architectures and regenerates the XCFramework.
 - `Support/generate_freetds_pc.sh`: generates a Homebrew `freetds.pc` file and symlink for local tooling/Xcode header discovery.
 - `Tests/FreeTDSKitTests`: fast unit tests.
 - `Tests/FreeTDSKitIntegrationTests`: Docker-backed SQL Server integration tests.
 
 ## How Linking Works
 
-This package does not expect user to install FreeTDS separately at build time. Instead, the package vendors the important C artifacts inside `Sources/CFreeTDS`:
+This package does not expect users to install FreeTDS separately. FreeTDS 1.5.19 and OpenSSL 3.5.8, built statically for macOS 15.0 on both arm64 and x86_64, are merged into a single archive and shipped as `Frameworks/FreeTDS.xcframework`. The XCFramework also carries the FreeTDS headers and a `CSybDB` module map.
 
-- FreeTDS headers under `Sources/CFreeTDS/include`
-- `libsybdb.a`
-- `libssl.a`
-- `libcrypto.a`
-
-`Package.swift` builds `CFreeTDS` as a C target and passes SwiftPM linker flags pointing at that directory:
+`Package.swift` declares it as a binary target, and the `CFreeTDS` shim depends on it:
 
 ```swift
-.unsafeFlags([
-    "\(Context.packageDirectory)/Sources/CFreeTDS/libsybdb.a",
-    "\(Context.packageDirectory)/Sources/CFreeTDS/libssl.a",
-    "\(Context.packageDirectory)/Sources/CFreeTDS/libcrypto.a",
-    "-liconv",
-])
+.binaryTarget(name: "FreeTDS", path: "Frameworks/FreeTDS.xcframework"),
+.target(
+    name: "CFreeTDS",
+    dependencies: ["FreeTDS"],
+    path: "Sources/CFreeTDS",
+    publicHeadersPath: "include",
+    linkerSettings: [.linkedLibrary("iconv")]
+),
 ```
 
-That means the package resolves as a self-contained SwiftPM dependency as long as those vendored archives and headers are kept in sync. The current archives are FreeTDS 1.5.19 and OpenSSL 3.5.8, built for macOS 15.0.
+Two reasons it is a binary target rather than linker flags:
 
-The archives are named by full path deliberately. The earlier form, `-L` plus `-lsybdb`, made the linker search: it takes the first match on the path and prefers a `.dylib` over a `.a`, so an environment that exports `LIBRARY_PATH` -- a Homebrew setup commonly adds `/opt/homebrew/lib` -- would link a system-wide FreeTDS over the vendored archive, silently and with no diagnostic:
+- **SwiftPM rejects `unsafeFlags` in any package that is not the root package.** An app that added FreeTDSKit from GitHub failed to resolve while the manifest linked the archives by path.
+- **Nothing is left for the linker to search for.** With `-L` plus `-lsybdb`, the linker takes the first match on its search path and prefers a `.dylib` over a `.a`. An environment that exports `LIBRARY_PATH` (Homebrew setups commonly add `/opt/homebrew/lib`) would silently link a system-wide FreeTDS. The binary target hands the linker the archive directly. For the same reason the module map has no `link` directive.
 
-```bash
-$ otool -L .build/debug/YourApp | grep sybdb
-    /opt/homebrew/opt/freetds/lib/libsybdb.5.dylib   # the system copy, not this repo's
-```
+To check what a build actually linked, `otool -L` should show no `libsybdb`, `libssl` or `libcrypto` entries (they are static), and `FreeTDSKit.getFreeTDSVersion()` should report the version vendored here.
 
-A full path leaves nothing to search, so that cannot happen. If you ever need to check what a build actually linked, `otool -L` should show no `libsybdb`/`libssl`/`libcrypto` entries at all -- they are static -- and `FreeTDSKit.getFreeTDSVersion()` should report the version vendored here.
+Because everything is static and universal, the package is suitable for sandboxed and Mac App Store apps. Such an app still needs the `com.apple.security.network.client` entitlement to reach SQL Server, and it cannot read `/usr/local/etc/freetds.conf` or `~/.freetds.conf` from inside the sandbox.
 
 ## Client Usage
 
@@ -167,29 +163,28 @@ What that script does:
 
 1. Downloads the selected OpenSSL and FreeTDS release tarballs.
 2. Configures both static-only (`no-shared` / `--disable-shared --enable-static`), with FreeTDS pointed at the OpenSSL it just built.
-3. Installs them into `Support/build/static-openssl` and `Support/build/static-freetds`.
-4. Copies `libsybdb.a`, `libssl.a`, and `libcrypto.a` into `Sources/CFreeTDS/`.
-5. Prints the deployment target of each archive, which should match the platform in `Package.swift`.
-
-Important limitation: the script does **not** refresh the vendored headers in `Sources/CFreeTDS/include`. They rarely change between FreeTDS patch releases -- 1.5.19 installs headers byte-identical to 1.5.16 -- but after a larger jump, diff them against `Support/build/static-freetds/include` and copy over anything that moved. A header that disagrees with `libsybdb.a` is the kind of mismatch that compiles and then misbehaves at runtime.
+3. Installs them into `Support/build/static-openssl-<arch>` and `Support/build/static-freetds-<arch>`.
+4. Does all of that once per architecture (arm64, x86_64), merges each architecture's `libsybdb.a`, `libssl.a` and `libcrypto.a` into one archive with `libtool`, and joins the two with `lipo`.
+5. Regenerates `Frameworks/FreeTDS.xcframework` from that archive and the freshly installed FreeTDS headers, so the headers and library can't drift apart.
+6. Prints each slice's platform and deployment target, which should match the platform in `Package.swift`.
 
 ### 3. Verify the package still links cleanly
 
-The C target is defined in [Package.swift](/Users/david/dev/oliwonders/FreeTDSKit/Package.swift), and the bridge module is declared in [Sources/CFreeTDS/module.modulemap](/Users/david/dev/oliwonders/FreeTDSKit/Sources/CFreeTDS/module.modulemap). After replacing vendored artifacts, run:
+The C target is defined in [Package.swift](/Users/david/dev/oliwonders/FreeTDSKit/Package.swift), and the FreeTDS module map is generated into the XCFramework by the build script. After replacing vendored artifacts, run:
 
 ```bash
 swift build
 swift test
 ```
 
-SwiftPM does not treat the vendored `.a` files as build inputs, so an incremental build after re-vendoring will happily report success while the old library is still linked in. Force a relink first:
+An incremental build after re-vendoring can report success while the old library is still linked in. Force a relink first:
 
 ```bash
 swift package clean     # or: touch Sources/CFreeTDS/FreeTDSWrapper.c
 swift build
 ```
 
-If the new FreeTDS version changes transitive requirements, update the linker flags in `Package.swift` accordingly.
+If the new FreeTDS version changes transitive requirements, add them as `linkedLibrary` or `linkedFramework` settings on `CFreeTDS` in `Package.swift`. Don't use `unsafeFlags`, because it breaks every app that depends on the package.
 
 ### 4. Confirm the runtime version
 
@@ -203,7 +198,7 @@ The unit test suite already exercises that path. Confirm it reports the version 
 
 ## Linking Notes For Local Development
 
-Most package consumers should not need a system-wide FreeTDS install because the package vendors the native artifacts. The extra linking helper script exists for local development on macOS, especially when Xcode or local tooling needs help finding `sybdb.h`.
+Most package consumers should not need a system-wide FreeTDS install because the package vendors the native artifacts. The XCFramework ships its own headers, so building the package never needs this. The helper script is only for other local tooling that wants a Homebrew FreeTDS to be discoverable through `pkg-config`.
 
 Run:
 
@@ -318,7 +313,7 @@ If you are forking this package and want a clean starting point:
 1. Run `swift test`.
 2. Run `FREETDSKIT_RUN_INTEGRATION_TESTS=1 Tests/FreeTDSKitIntegrationTests/run-integration-tests.sh`.
 3. If you are upgrading FreeTDS, rebuild and re-vendor the C artifacts first.
-4. Keep `Sources/CFreeTDS/include`, `libsybdb.a`, `libssl.a`, and `libcrypto.a` aligned.
+4. Regenerate `Frameworks/FreeTDS.xcframework` only with `Support/buildandlinkfreetds.sh`, so its headers and archive stay in step.
 5. Verify the package still builds as a standalone SwiftPM dependency before publishing your fork.
 
 ## License

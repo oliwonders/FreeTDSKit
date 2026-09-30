@@ -13,27 +13,21 @@ let package = Package(
         )
     ],
     targets: [
+        // FreeTDS and the OpenSSL it links, as one static universal archive.
+        // Built by Support/buildandlinkfreetds.sh. A binary target rather
+        // than linker flags because SwiftPM rejects unsafeFlags in any
+        // package consumed as a dependency.
+        .binaryTarget(
+            name: "FreeTDS",
+            path: "Frameworks/FreeTDS.xcframework"
+        ),
         .target(
             name: "CFreeTDS",
+            dependencies: ["FreeTDS"],
             path: "Sources/CFreeTDS",
             publicHeadersPath: "include",
-            cSettings: [
-                .headerSearchPath("include")
-            ],
             linkerSettings: [
-                // Name the vendored archives by full path rather than
-                // -L + -l. A search-path lookup takes the first match and
-                // prefers a .dylib over a .a, so an environment that exports
-                // LIBRARY_PATH (Homebrew setups commonly add /opt/homebrew/lib)
-                // links a system-wide FreeTDS instead of the archive in this
-                // repo, silently and with no diagnostic. A full path leaves
-                // the linker nothing to search.
-                .unsafeFlags([
-                    "\(Context.packageDirectory)/Sources/CFreeTDS/libsybdb.a",
-                    "\(Context.packageDirectory)/Sources/CFreeTDS/libssl.a",
-                    "\(Context.packageDirectory)/Sources/CFreeTDS/libcrypto.a",
-                    "-liconv",
-                ])
+                .linkedLibrary("iconv")
             ]
         ),
         .target(

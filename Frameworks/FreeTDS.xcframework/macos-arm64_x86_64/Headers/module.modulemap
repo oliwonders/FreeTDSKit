@@ -1,5 +1,4 @@
-module CFreeTDS {
+module CSybDB {
     header "sybdb.h"
-    link "sybdb"
     export *
 }
