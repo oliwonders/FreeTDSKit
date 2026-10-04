@@ -145,6 +145,19 @@ final class FreeTDSKitIntegrationTypedTests: FreeTDSKitIntegrationTestCase {
                        "VarBinaryColumn should be empty for second row")
         await db.close()
     }
+
+    /// uniqueidentifier arrives as 16 raw bytes with the first three groups
+    /// little-endian; it must round-trip to the same textual GUID.
+    func testUniqueIdentifierColumn() async throws {
+        let db = try makeConnection()
+        let result = try await db.execute(
+            queryString: "SELECT CAST('93C91F8B-FD98-4EB2-9F48-DE9B096716F4' AS uniqueidentifier) AS G, CAST(NULL AS uniqueidentifier) AS N"
+        )
+        XCTAssertEqual(result.rows[0]["G"]?.uuid,
+                       UUID(uuidString: "93C91F8B-FD98-4EB2-9F48-DE9B096716F4"))
+        XCTAssertNil(result.rows[0]["N"]?.uuid)
+        await db.close()
+    }
 }
 
 

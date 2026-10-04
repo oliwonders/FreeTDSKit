@@ -293,7 +293,21 @@ RowData* fetchResultsWithType(DBPROCESS* dbproc, int* rowCount) {
                 BYTE* data = dbdata(dbproc, i);
                 int dataLength = dbdatlen(dbproc, i);
                 char* value;
-                if (data && dataLength > 0) {
+                if (data && colType == 36 && dataLength == 16) {
+                    // uniqueidentifier arrives as 16 raw bytes; the Swift side
+                    // parses text, so format it here. SQL Server stores the
+                    // first three groups little-endian.
+                    value = malloc(37);
+                    if (value) {
+                        snprintf(value, 37,
+                                 "%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%02X%02X%02X%02X",
+                                 data[3], data[2], data[1], data[0],
+                                 data[5], data[4],
+                                 data[7], data[6],
+                                 data[8], data[9],
+                                 data[10], data[11], data[12], data[13], data[14], data[15]);
+                    }
+                } else if (data && dataLength > 0) {
                     value = malloc(dataLength + 1);
                     if (value) {
                         memcpy(value, data, dataLength);
