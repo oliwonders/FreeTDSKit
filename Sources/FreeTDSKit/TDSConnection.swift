@@ -302,6 +302,7 @@ public actor TDSConnection {
                     let key = String(cString: namePtr)
                     let value = determineSQLType(
                         valPtr,
+                        length: row.columnLengths.map { Int($0[j]) },
                         columnType: Int(row.columnTypes?[j] ?? 0)
                     )
                     dict[key] = value
@@ -402,6 +403,7 @@ public actor TDSConnection {
                         let key = String(cString: namePtr)
                         let value = determineSQLType(
                             valPtr,
+                            length: row.columnLengths.map { Int($0[j]) },
                             columnType: Int(row.columnTypes?[j] ?? 0)
                         )
                         dict[key] = value

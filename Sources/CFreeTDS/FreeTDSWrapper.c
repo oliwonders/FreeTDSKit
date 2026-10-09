@@ -241,6 +241,44 @@ int executeQuery(DBPROCESS* dbproc, const char* query) {
 
 // Fetch results
 // Function to fetch results and return an array of RowData
+// Format a fixed-width numeric column as text for the Swift side to parse.
+// Reads the value at its real width (memcpy, since dbdata gives no alignment
+// guarantee) and prints floats with enough digits to round-trip exactly.
+// Returns 1 and sets *out (NULL if allocation failed) when colType is numeric.
+static int formatNumber(int colType, const BYTE* data, int dataLength, char** out) {
+    char buf[32];
+    switch (colType) {
+        case SYBINT1: {
+            unsigned char v; if (dataLength != sizeof v) return 0;
+            memcpy(&v, data, sizeof v); snprintf(buf, sizeof buf, "%u", v); break;
+        }
+        case SYBINT2: {
+            short v; if (dataLength != sizeof v) return 0;
+            memcpy(&v, data, sizeof v); snprintf(buf, sizeof buf, "%d", v); break;
+        }
+        case SYBINT4: {
+            int v; if (dataLength != sizeof v) return 0;
+            memcpy(&v, data, sizeof v); snprintf(buf, sizeof buf, "%d", v); break;
+        }
+        case SYBINT8: {
+            long long v; if (dataLength != sizeof v) return 0;
+            memcpy(&v, data, sizeof v); snprintf(buf, sizeof buf, "%lld", v); break;
+        }
+        case SYBFLT8: {
+            double v; if (dataLength != sizeof v) return 0;
+            memcpy(&v, data, sizeof v); snprintf(buf, sizeof buf, "%.17g", v); break;
+        }
+        case SYBREAL: {
+            float v; if (dataLength != sizeof v) return 0;
+            memcpy(&v, data, sizeof v); snprintf(buf, sizeof buf, "%.9g", (double)v); break;
+        }
+        default:
+            return 0;
+    }
+    *out = strdup(buf);
+    return 1;
+}
+
 RowData* fetchResultsWithType(DBPROCESS* dbproc, int* rowCount) {
     int result_code;
     int rows_allocated = 0;
@@ -278,7 +316,9 @@ RowData* fetchResultsWithType(DBPROCESS* dbproc, int* rowCount) {
             rows[current_row].columnNames = malloc(ncols * sizeof(char*));
             rows[current_row].columnValues = malloc(ncols * sizeof(char*));
             rows[current_row].columnTypes = malloc(ncols * sizeof(int));
-            if (!rows[current_row].columnNames || !rows[current_row].columnValues || !rows[current_row].columnTypes) {
+            rows[current_row].columnLengths = malloc(ncols * sizeof(int));
+            if (!rows[current_row].columnNames || !rows[current_row].columnValues || !rows[current_row].columnTypes
+                || !rows[current_row].columnLengths) {
                 freeFetchedResults(rows, current_row);
                 *rowCount = 0;
                 return NULL;
@@ -293,6 +333,7 @@ RowData* fetchResultsWithType(DBPROCESS* dbproc, int* rowCount) {
                 BYTE* data = dbdata(dbproc, i);
                 int dataLength = dbdatlen(dbproc, i);
                 char* value;
+                int valueLength = 0;
                 if (data && colType == 36 && dataLength == 16) {
                     // uniqueidentifier arrives as 16 raw bytes; the Swift side
                     // parses text, so format it here. SQL Server stores the
@@ -306,30 +347,24 @@ RowData* fetchResultsWithType(DBPROCESS* dbproc, int* rowCount) {
                                  data[7], data[6],
                                  data[8], data[9],
                                  data[10], data[11], data[12], data[13], data[14], data[15]);
+                        valueLength = 36;
+                    }
+                } else if (data && dataLength > 0 && formatNumber(colType, data, dataLength, &value)) {
+                    if (value) {
+                        valueLength = (int)strlen(value);
                     }
                 } else if (data && dataLength > 0) {
                     value = malloc(dataLength + 1);
                     if (value) {
                         memcpy(value, data, dataLength);
                         value[dataLength] = '\0';
-                        switch (colType) {
-                            case SYBINT1:
-                            case SYBINT2:
-                            case SYBINT4:
-                                snprintf(value, dataLength + 1, "%d", *(int*)data);
-                                break;
-                            case SYBFLT8:
-                            case SYBREAL:
-                                snprintf(value, dataLength + 1, "%f", *(double*)data);
-                                break;
-                            default:
-                                break;
-                        }
+                        valueLength = dataLength;
                     }
                 } else {
                     value = strdup("");
                 }
                 rows[current_row].columnValues[i - 1] = value;
+                rows[current_row].columnLengths[i - 1] = value ? valueLength : 0;
             }
             current_row++;
         }
@@ -355,6 +390,7 @@ void freeFetchedResults(RowData* rows, int rowCount) {
         free(rows[i].columnNames);
         free(rows[i].columnValues);
         free(rows[i].columnTypes);
+        free(rows[i].columnLengths);
     }
     free(rows);
 }

@@ -37,6 +37,9 @@ typedef struct {
     char **columnNames;
     char **columnValues;
     int *columnTypes; // Array to hold column data types (e.g., integers representing SYBINT, SYBREAL, etc.)
+    // Byte length of each value, excluding the trailing NUL. Binary values can
+    // contain zero bytes, so strlen() on columnValues would truncate them.
+    int *columnLengths;
     int columnCount;
 } RowData;
 

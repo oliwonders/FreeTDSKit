@@ -130,7 +130,9 @@ public struct TDSDateTimeOffset: Equatable, Codable,
 public let SYBGEOGRAPHY: Int = 240  // Actual value from SQL Server
 public let SYBGEOMETRY: Int = 241  // Actual value from SQL Server
 
-func determineSQLType(_ colValue: UnsafePointer<CChar>, columnType: Int)
+/// `length` is the value's byte count. Pass it for binary columns, which can
+/// contain zero bytes; when nil the value is read up to its NUL terminator.
+func determineSQLType(_ colValue: UnsafePointer<CChar>, length: Int? = nil, columnType: Int)
     -> SQLDataType
 {
 
@@ -323,8 +325,7 @@ func determineSQLType(_ colValue: UnsafePointer<CChar>, columnType: Int)
     case SYBTEXT, 99:  // 99 = SYBNTEXT (Unicode)
         return .text(String(cString: colValue))
     case SYBBINARY, SYBVARBINARY:  //sql server type 165, 173
-        let dataLength = strlen(colValue)
-        let data = Data(bytes: colValue, count: Int(dataLength))
+        let data = Data(bytes: colValue, count: length ?? strlen(colValue))
         return .binary(data)
     case SYBBIT:
         let valueStr = String(cString: colValue).lowercased()

@@ -13,6 +13,13 @@ import XCTest
 @Suite("Miscellaneous SQLDataType Tests") struct SQLDataTypeTests {
 
     @Test
+    func binaryKeepsZeroBytesWhenLengthGiven() {
+        let bytes: [CChar] = [0x00, 0x01, 0x00, 0x02, 0x00]
+        let sqlType = determineSQLType(bytes, length: bytes.count, columnType: Int(SYBVARBINARY))
+        #expect(sqlType.binary.map(Array.init) == [0x00, 0x01, 0x00, 0x02, 0x00])
+    }
+
+    @Test
     func uniqueIdentifier() {
         let cString: [CChar] = "354E427F-F042-445B-A9F0-E19540E036B9".cString(
             using: .utf8)!
