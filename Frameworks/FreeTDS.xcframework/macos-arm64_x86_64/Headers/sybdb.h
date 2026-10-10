@@ -1241,6 +1241,8 @@ RETCODE dbwritetext(DBPROCESS * dbproc, char *objname, DBBINARY * textptr, DBTIN
 /* LOGINREC manipulation */
 RETCODE dbsetlname(LOGINREC * login, const char *value, int which);
 RETCODE dbsetlbool(LOGINREC * login, int value, int which);
+/* FreeTDSKit extension: TLS certificate verification for a login. */
+RETCODE dbsetltlsverify(LOGINREC * login, const char *cafile, const char *certificate_host_name);
 RETCODE dbsetlshort(LOGINREC * login, int value, int which);
 RETCODE dbsetllong(LOGINREC * login, long value, int which);
 RETCODE dbsetlversion (LOGINREC * login, BYTE version);

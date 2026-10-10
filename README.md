@@ -16,7 +16,7 @@ FreeTDSKit is a Swift wrapper around the [FreeTDS](https://github.com/FreeTDS/fr
 
 ## How Linking Works
 
-This package does not expect users to install FreeTDS separately. FreeTDS 1.5.19 and OpenSSL 3.5.8, built statically for macOS 15.0 on both arm64 and x86_64, are merged into a single archive and shipped as `Frameworks/FreeTDS.xcframework`. The XCFramework also carries the FreeTDS headers and a `CSybDB` module map.
+This package does not expect users to install FreeTDS separately. FreeTDS 1.5.19 (with FreeTDSKit's patches, see `Support/patches`) and OpenSSL 3.5.9, built statically for macOS 15.0 on both arm64 and x86_64, are merged into a single archive and shipped as `Frameworks/FreeTDS.xcframework`. The XCFramework also carries the FreeTDS headers and a `CSybDB` module map.
 
 `Package.swift` declares it as a binary target, and the `CFreeTDS` shim depends on it:
 
@@ -75,6 +75,30 @@ for try await user in connection.query(queryString: "SELECT id, name FROM users"
 
 await connection.close()
 ```
+
+### Encryption and certificate checks
+
+Connections are encrypted and the server's certificate is verified by default,
+against the macOS system root certificates. A server with a publicly trusted
+certificate, such as Azure SQL, needs nothing extra.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `encryption` | `.mandatory` | `.mandatory` refuses to connect unless the whole session is encrypted. `.strict` is TDS 8.0, TLS from the first byte (SQL Server 2022 and Azure SQL). `.optional` falls back to clear text when the server can't do TLS; avoid it outside isolated networks. |
+| `trustServerCertificate` | `false` | Skips the certificate check, like Microsoft's `TrustServerCertificate=yes`. For development servers with self-signed certificates only. Ignored with `.strict`. |
+| `certificateAuthorityFile` | `nil` | A PEM file of CAs to trust instead of the system roots: a company CA, or a server's own self-signed certificate. |
+| `hostNameInCertificate` | `nil` | The name the certificate must match, when it differs from `host`, e.g. when connecting by IP address. |
+
+```swift
+// A local SQL Server in Docker, which generates its own certificate:
+var config = ConnectionConfiguration(host: "localhost", username: "sa", password: pw, database: "dev")
+config.trustServerCertificate = true
+```
+
+Earlier versions of FreeTDSKit only *requested* encryption and never checked the
+certificate, so a server without TLS, or anyone between client and server, got
+the login and the data. A server that previously connected without these
+settings may now need `trustServerCertificate` or `certificateAuthorityFile`.
 
 ### Errors
 
@@ -145,9 +169,15 @@ The upgrade workflow is based on vendoring new static [FreeTDS](https://github.c
 Edit [Support/buildandlinkfreetds.sh](/Users/david/dev/oliwonders/FreeTDSKit/Support/buildandlinkfreetds.sh) and change either or both of:
 
 ```bash
-OPENSSL_VERSION="3.5.8"
+OPENSSL_VERSION="3.5.9"
 FREETDS_VERSION="1.5.19"
+OPENSSL_SHA256="..."
+FREETDS_SHA256="..."
 ```
+
+Take each SHA-256 from upstream rather than from your own download: openssl.org publishes `<tarball>.sha256` (also attached to the GitHub release), and freetds.org publishes `<tarball>.md5` to cross-check a second download against. The script refuses to build from a tarball that doesn't match.
+
+A weekly GitHub Actions job (`.github/workflows/upstream-watch.yml`) opens an issue when either project publishes a newer release, flagging OpenSSL security releases.
 
 Prefer an OpenSSL LTS release (the 3.5 series is supported into 2030) over the newest one, since a vendored archive only gets refreshed when someone runs this script.
 
@@ -161,12 +191,13 @@ Run:
 
 What that script does:
 
-1. Downloads the selected OpenSSL and FreeTDS release tarballs.
-2. Configures both static-only (`no-shared` / `--disable-shared --enable-static`), with FreeTDS pointed at the OpenSSL it just built.
-3. Installs them into `Support/build/static-openssl-<arch>` and `Support/build/static-freetds-<arch>`.
-4. Does all of that once per architecture (arm64, x86_64), merges each architecture's `libsybdb.a`, `libssl.a` and `libcrypto.a` into one archive with `libtool`, and joins the two with `lipo`.
-5. Regenerates `Frameworks/FreeTDS.xcframework` from that archive and the freshly installed FreeTDS headers, so the headers and library can't drift apart.
-6. Prints each slice's platform and deployment target, which should match the platform in `Package.swift`.
+1. Downloads the selected OpenSSL and FreeTDS release tarballs and checks their SHA-256.
+2. Applies `Support/patches/freetds-*.patch` to FreeTDS (see the README there; a patch that no longer applies stops the build).
+3. Configures both static-only (`no-shared` / `--disable-shared --enable-static`), with FreeTDS pointed at the OpenSSL it just built.
+4. Installs them into `Support/build/stage-<arch>`, configured as if installed in `/usr/local/freetdskit` so that no path from your machine ends up in the binary.
+5. Does all of that once per architecture (arm64, x86_64), merges each architecture's `libsybdb.a`, `libssl.a` and `libcrypto.a` into one archive with `libtool`, and joins the two with `lipo`.
+6. Regenerates `Frameworks/FreeTDS.xcframework` from that archive and the freshly installed FreeTDS headers, so the headers and library can't drift apart.
+7. Prints each slice's platform and deployment target, which should match the platform in `Package.swift`, and fails if the archive contains a build path or lacks the patches.
 
 ### 3. Verify the package still links cleanly
 

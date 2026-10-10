@@ -64,7 +64,8 @@ final class FreeTDSKitIntegrationTypedTests: FreeTDSKitIntegrationTestCase {
             server: "\(server):\(port)",
             username: username,
             password: password,
-            database: database
+            database: database,
+            trustServerCertificate: trustServerCertificate
         )
         var rows: [SpatialRow] = []
     for try await row in dbConnection.query(

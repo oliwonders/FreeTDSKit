@@ -46,7 +46,14 @@ typedef struct {
 
 const char* getDBVersion(void);
 int initializeDBLibrary(void);
-DBPROCESS* connectToDatabase(const char* server, const char* user, const char* password, const char* database, const int timeout);
+// encryption: FreeTDS "encryption" value ("strict", "require" or "request").
+// caFile: PEM file the server certificate must chain to; NULL or "" skips
+//   verification (except with "strict", which always verifies).
+// certificateHostName: name the certificate must match; NULL or "" means the
+//   host in `server`.
+DBPROCESS* connectToDatabase(const char* server, const char* user, const char* password, const char* database,
+                             const int timeout, const char* encryption, const char* caFile,
+                             const char* certificateHostName);
 int executeQuery(DBPROCESS* dbproc, const char* query);
 
 // Bound how long a query on this connection may run, in seconds. Applies to

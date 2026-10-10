@@ -1,0 +1,85 @@
+diff -ru a/include/sybdb.h b/include/sybdb.h
+--- a/include/sybdb.h
++++ b/include/sybdb.h
+@@ -1241,6 +1241,8 @@
+ /* LOGINREC manipulation */
+ RETCODE dbsetlname(LOGINREC * login, const char *value, int which);
+ RETCODE dbsetlbool(LOGINREC * login, int value, int which);
++/* FreeTDSKit extension: TLS certificate verification for a login. */
++RETCODE dbsetltlsverify(LOGINREC * login, const char *cafile, const char *certificate_host_name);
+ RETCODE dbsetlshort(LOGINREC * login, int value, int which);
+ RETCODE dbsetllong(LOGINREC * login, long value, int which);
+ RETCODE dbsetlversion (LOGINREC * login, BYTE version);
+diff -ru a/src/dblib/dblib.c b/src/dblib/dblib.c
+--- a/src/dblib/dblib.c
++++ b/src/dblib/dblib.c
+@@ -892,6 +892,37 @@
+ 	}
+ }
+ 
++/**
++ * \ingroup dblib_core
++ * \brief FreeTDSKit extension: verify the server's TLS certificate.
++ *
++ * \param login the \c LOGINREC* to modify.
++ * \param cafile PEM file of trusted CA certificates. NULL or "" turns
++ *        verification off (unless encryption is "strict", which always
++ *        verifies). Unlike dbsetlname values, not capped at
++ *        TDS_MAX_LOGIN_STR_SZ: a sandbox container path is longer than that.
++ * \param certificate_host_name name the certificate must match; NULL or ""
++ *        means the server's host name.
++ * \retval SUCCEED the values were set.
++ * \retval FAIL \a login was NULL or memory ran out.
++ */
++RETCODE
++dbsetltlsverify(LOGINREC * login, const char *cafile, const char *certificate_host_name)
++{
++	tdsdump_log(TDS_DBG_FUNC, "dbsetltlsverify(%p, %s, %s)\n", login, cafile, certificate_host_name);
++
++	if (login == NULL) {
++		dbperror(NULL, SYBEASNL, 0);
++		return FAIL;
++	}
++	if (!tds_dstr_copy(&login->tds_login->cafile, cafile ? cafile : ""))
++		return FAIL;
++	if (!tds_dstr_copy(&login->tds_login->certificate_host_name,
++			   certificate_host_name ? certificate_host_name : ""))
++		return FAIL;
++	return SUCCEED;
++}
++
+ /** \internal
+  * \ingroup dblib_internal
+  * \brief Set a boolean value in a \c LOGINREC structure.  
+diff -ru a/src/tds/config.c b/src/tds/config.c
+--- a/src/tds/config.c
++++ b/src/tds/config.c
+@@ -813,6 +813,13 @@
+ 	if (res && !tds_dstr_isempty(&login->server_spn))
+ 		res = tds_dstr_dup(&connection->server_spn, &login->server_spn);
+ 
++	/* FreeTDSKit: TLS verification settings chosen by the caller. */
++	if (res && !tds_dstr_isempty(&login->cafile))
++		res = tds_dstr_dup(&connection->cafile, &login->cafile);
++
++	if (res && !tds_dstr_isempty(&login->certificate_host_name))
++		res = tds_dstr_dup(&connection->certificate_host_name, &login->certificate_host_name);
++
+ 	/* copy other info not present in configuration file */
+ 	connection->capabilities = login->capabilities;
+ 
+diff -ru a/src/tds/tls.c b/src/tds/tls.c
+--- a/src/tds/tls.c
++++ b/src/tds/tls.c
+@@ -912,7 +912,10 @@
+ 
+ 	tdsdump_log(TDS_DBG_INFO1, "Got name %s\n", name_utf8);
+ 	ret = 0;
+-	if (strlen(name_utf8) == name_len && check_wildcard(name_utf8, hostname))
++	/* FreeTDSKit: check_wildcard takes (host, pattern), as its self-test
++	 * shows; upstream passes the certificate's pattern first, so wildcard
++	 * certificates such as *.database.windows.net never matched. */
++	if (strlen(name_utf8) == name_len && check_wildcard(hostname, name_utf8))
+ 		ret = 1;
+ 	free(name_utf8);
+ 	return ret;

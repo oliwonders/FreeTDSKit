@@ -22,12 +22,19 @@ class FreeTDSKitIntegrationTestCase: XCTestCase {
 
     let testTable = "DataTypeTest"
 
+    /// The Docker SQL Server generates its own self-signed certificate, so the
+    /// tests trust it unless pointed at a server with a real one.
+    var trustServerCertificate: Bool {
+        ProcessInfo.processInfo.environment["FREETDSKIT_SQL_TRUST_SERVER_CERTIFICATE"] != "0"
+    }
+
     func makeConnection() throws -> TDSConnection {
         try TDSConnection(
             server: connectionString,
             username: username,
             password: password,
-            database: database
+            database: database,
+            trustServerCertificate: trustServerCertificate
         )
     }
 }

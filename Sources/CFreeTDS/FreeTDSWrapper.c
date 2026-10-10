@@ -175,7 +175,9 @@ int initializeDBLibrary(void) {
 }
 
 // Connect to the database
-DBPROCESS* connectToDatabase(const char* server, const char* user, const char* password, const char* database, const int timeout) {
+DBPROCESS* connectToDatabase(const char* server, const char* user, const char* password, const char* database,
+                             const int timeout, const char* encryption, const char* caFile,
+                             const char* certificateHostName) {
     LOGINREC *login;
     DBPROCESS *dbproc;
 
@@ -196,6 +198,21 @@ DBPROCESS* connectToDatabase(const char* server, const char* user, const char* p
     // works for on-prem SQL Server.
     if (database != NULL && database[0] != '\0') {
         DBSETLDBNAME(login, database);
+    }
+    // FreeTDS only *requests* encryption by default: a server (or anyone in
+    // between) that answers "not supported" gets the login in clear text, and
+    // one that answers "off" gets every query and result in clear text. And it
+    // checks the server certificate only when given a CA file. Set both
+    // explicitly so neither depends on defaults or on a freetds.conf.
+    if (encryption != NULL && encryption[0] != '\0' && DBSETLENCRYPTION(login, encryption) == FAIL) {
+        snprintf(lastErrorMessage, sizeof(lastErrorMessage), "Invalid encryption setting \"%s\"", encryption);
+        dbloginfree(login);
+        return NULL;
+    }
+    if (dbsetltlsverify(login, caFile, certificateHostName) == FAIL) {
+        snprintf(lastErrorMessage, sizeof(lastErrorMessage), "Could not set TLS certificate verification");
+        dbloginfree(login);
+        return NULL;
     }
     dberrhandle(errorHandler);
     dbmsghandle(messageHandler);

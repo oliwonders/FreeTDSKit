@@ -12,7 +12,8 @@ final class FreeTDSKitIntegrationTimeoutTests: FreeTDSKitIntegrationTestCase {
             username: username,
             password: password,
             database: database,
-            queryTimeout: queryTimeout
+            queryTimeout: queryTimeout,
+            trustServerCertificate: trustServerCertificate
         )
     }
 

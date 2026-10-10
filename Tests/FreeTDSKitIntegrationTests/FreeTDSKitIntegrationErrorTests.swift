@@ -16,7 +16,8 @@ final class FreeTDSKitIntegrationErrorTests: FreeTDSKitIntegrationTestCase {
                 server: connectionString,
                 username: username,
                 password: password,
-                database: "FreeTDSKitNoSuchDatabase"
+                database: "FreeTDSKitNoSuchDatabase",
+                trustServerCertificate: trustServerCertificate
             )
             await connection.close()
             XCTFail("Expected the connection to a missing database to fail")

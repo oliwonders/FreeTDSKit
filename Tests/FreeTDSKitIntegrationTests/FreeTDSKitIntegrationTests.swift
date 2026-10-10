@@ -26,7 +26,8 @@ import XCTest
                     server: "127.0.0.254",
                     username: "sa",
                     password: "YourStrongPassword1",
-                    database: "FreeTDSKitTestDB"
+                    database: "FreeTDSKitTestDB",
+                    trustServerCertificate: trustServerCertificate
                 )
                 await connection.close()
                 print("❌ Expected connection to fail, but it succeeded")
@@ -43,7 +44,8 @@ import XCTest
                     server: "127.0.0.1:1438",
                     username: "invalidusername",
                     password: "YourStrongPassword1",
-                    database: "FreeTDSKitTestDB"
+                    database: "FreeTDSKitTestDB",
+                    trustServerCertificate: trustServerCertificate
                 )
                 await connection.close()
                 XCTFail("❌ Connection should have failed")
@@ -59,7 +61,8 @@ import XCTest
                     server: "127.0.0.1:1438",
                     username: "sa",
                     password: "invalidpassword",
-                    database: "FreeTDSKitTestDB"
+                    database: "FreeTDSKitTestDB",
+                    trustServerCertificate: trustServerCertificate
                 )
                 await connection.close()
                 XCTFail("❌ Connection should have failed")
@@ -75,7 +78,8 @@ import XCTest
                     server: "127.0.0.1:1438",
                     username: "sa",
                     password: "YourStrongPassword1",
-                    database: "DBDoesNotExist"
+                    database: "DBDoesNotExist",
+                    trustServerCertificate: trustServerCertificate
                 )
                 await connection.close()
                 XCTFail("❌ Connection should have failed")
@@ -94,6 +98,7 @@ import XCTest
             configuration.password = "YourStrongPassword1"
             configuration.database = "FreeTDSKitTestDB"
             configuration.loginTimeout = 10
+            configuration.trustServerCertificate = trustServerCertificate
 
             do {
                 let dbConnection = try TDSConnection(configuration: configuration)

@@ -95,6 +95,19 @@ public struct ConnectionConfiguration: Sendable {
     /// Seconds a query may run before DB-Library gives up on it. 0 waits
     /// indefinitely. Unlike `loginTimeout`, this is per connection.
     public var queryTimeout: Int
+    /// How the connection uses TLS. Defaults to `.mandatory`.
+    public var encryption: TDSEncryption = .mandatory
+    /// Skip checking the server's certificate, as Microsoft's
+    /// `TrustServerCertificate=yes` does. For development servers with
+    /// self-signed certificates only: it lets anyone on the network path
+    /// impersonate the server. Ignored with `.strict`.
+    public var trustServerCertificate = false
+    /// PEM file of CA certificates to trust instead of the macOS system roots,
+    /// e.g. a company CA or a server's self-signed certificate.
+    public var certificateAuthorityFile: URL?
+    /// Name the server certificate must match, when it differs from `host`
+    /// (connecting by IP address or through a private endpoint, say).
+    public var hostNameInCertificate: String?
 
     @available(*, deprecated, renamed: "loginTimeout")
     public var timeout: Int {
@@ -121,7 +134,11 @@ public struct ConnectionConfiguration: Sendable {
         password: String,
         database: String,
         loginTimeout: Int = defaultLoginTimeout,
-        queryTimeout: Int = defaultQueryTimeout
+        queryTimeout: Int = defaultQueryTimeout,
+        encryption: TDSEncryption = .mandatory,
+        trustServerCertificate: Bool = false,
+        certificateAuthorityFile: URL? = nil,
+        hostNameInCertificate: String? = nil
     ) {
         self.host = host
         self.port = port
@@ -130,6 +147,10 @@ public struct ConnectionConfiguration: Sendable {
         self.database = database
         self.loginTimeout = loginTimeout
         self.queryTimeout = queryTimeout
+        self.encryption = encryption
+        self.trustServerCertificate = trustServerCertificate
+        self.certificateAuthorityFile = certificateAuthorityFile
+        self.hostNameInCertificate = hostNameInCertificate
     }
 
     @available(
@@ -172,7 +193,11 @@ public actor TDSConnection {
             password: configuration.password,
             database: configuration.database,
             loginTimeout: configuration.loginTimeout,
-            queryTimeout: configuration.queryTimeout
+            queryTimeout: configuration.queryTimeout,
+            encryption: configuration.encryption,
+            trustServerCertificate: configuration.trustServerCertificate,
+            certificateAuthorityFile: configuration.certificateAuthorityFile,
+            hostNameInCertificate: configuration.hostNameInCertificate
         )
     }
 
@@ -204,14 +229,36 @@ public actor TDSConnection {
     ///     opens with different values race.
     ///   - queryTimeout: seconds a query on this connection may run; 0 waits
     ///     indefinitely.
+    ///   - encryption: how the connection uses TLS; see ``TDSEncryption``.
+    ///   - trustServerCertificate: skip checking the server certificate. For
+    ///     development servers only; ignored with `.strict`.
+    ///   - certificateAuthorityFile: PEM file of CAs to trust instead of the
+    ///     macOS system roots.
+    ///   - hostNameInCertificate: name the certificate must match, when it
+    ///     differs from the host in `server`.
     public init(
         server: String,
         username: String,
         password: String,
         database: String,
         loginTimeout: Int = defaultLoginTimeout,
-        queryTimeout: Int = defaultQueryTimeout
+        queryTimeout: Int = defaultQueryTimeout,
+        encryption: TDSEncryption = .mandatory,
+        trustServerCertificate: Bool = false,
+        certificateAuthorityFile: URL? = nil,
+        hostNameInCertificate: String? = nil
     ) throws {
+        let caFile: String?
+        do {
+            caFile = try TrustedRoots.caFile(
+                encryption: encryption,
+                trustServerCertificate: trustServerCertificate,
+                certificateAuthorityFile: certificateAuthorityFile
+            )
+        } catch {
+            throw TDSConnectionError.connectionFailed(reason: error.reason)
+        }
+
         let dbInit = initializeDBLibrary()
         if dbInit != 0 {
             throw TDSConnectionError.connectionFailed(
@@ -224,7 +271,10 @@ public actor TDSConnection {
             username,
             password,
             database,
-            Int32(loginTimeout)
+            Int32(loginTimeout),
+            encryption.freeTDSValue,
+            caFile,
+            hostNameInCertificate
         )
         guard let connection = self.connection else {
             throw TDSConnectionError.connectionFailed(
