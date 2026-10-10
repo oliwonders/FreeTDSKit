@@ -64,7 +64,7 @@ struct FreeTDSKitTLSVerificationTests {
         var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
         getnameinfo(info.pointee.ai_addr, info.pointee.ai_addrlen, &buffer, socklen_t(buffer.count),
                     nil, 0, NI_NUMERICHOST)
-        return String(cString: buffer)
+        return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 
     @Test func trustedCertificateIsAccepted() {
@@ -91,6 +91,35 @@ struct FreeTDSKitTLSVerificationTests {
     @Test func trustServerCertificateSkipsTheCheck() throws {
         let error = attempt(server: try ipAddress(of: host), trustServerCertificate: true)
         #expect(error?.messages.isEmpty == false, "TLS should have succeeded and the server answered")
+    }
+
+    /// Logins failing at the same moment must each report their own server
+    /// message ("Login failed for user '<name>'"), not another connection's.
+    @Test func concurrentLoginFailuresKeepTheirOwnMessages() async {
+        let host = self.host
+        let results = await withTaskGroup(of: (String, String).self) { group in
+            for i in 0..<12 {
+                let user = "freetdskit-tls-check-\(i)"
+                group.addTask {
+                    do {
+                        _ = try TDSConnection(
+                            server: "\(host):1433", username: user,
+                            password: "not-a-real-password", database: "")
+                        return (user, "connected")
+                    } catch let error as TDSConnectionError {
+                        return (user, error.messages.map(\.text).joined(separator: " | "))
+                    } catch {
+                        return (user, "\(error)")
+                    }
+                }
+            }
+            var all: [(String, String)] = []
+            for await result in group { all.append(result) }
+            return all
+        }
+        for (user, messages) in results {
+            #expect(messages.contains("'\(user)'"), "\(user) got: \(messages)")
+        }
     }
 
     /// A self-signed certificate, generated once for this test and trusted by

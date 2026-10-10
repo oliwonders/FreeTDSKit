@@ -5,6 +5,7 @@
 //  Created by David Oliver on 12/27/24.
 //
 
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,21 +37,43 @@ typedef struct {
 // by "Login failed for user ...". Keeping only the newest message therefore
 // throws away the only one that says what went wrong, so record them all in
 // arrival order and report the whole set.
-static TdsMessage tdsMessages[MAX_TDS_MESSAGES];
-static int tdsMessageCount = 0;   // messages retained (capped at MAX_TDS_MESSAGES)
-static int tdsMessagesSeen = 0;   // messages reported, including any dropped
-static char lastErrorMessage[1024] = "";
-static char combinedMessage[MAX_TDS_MESSAGES * (TDS_MESSAGE_TEXT_LEN + 128) + 64];
+typedef struct {
+    TdsMessage messages[MAX_TDS_MESSAGES];
+    int count;   // messages retained (capped at MAX_TDS_MESSAGES)
+    int seen;    // messages reported, including any dropped
+    char lastError[1024];
+    char combined[MAX_TDS_MESSAGES * (TDS_MESSAGE_TEXT_LEN + 128) + 64];
+} TdsMessageLog;
+
+// Each connection has its own log, hung off the DBPROCESS with dbsetuserdata,
+// so one connection's errors can never be reported as -- or clobbered by --
+// another's, and two connections failing at once never touch the same memory.
+//
+// A connection that is still logging in has no log of its own yet, so messages
+// raised then go to the calling thread's log. dbopen runs on one thread from
+// start to finish, which makes that thread the one to read them on.
+static _Thread_local TdsMessageLog threadLog;
+
+static TdsMessageLog* logFor(DBPROCESS *dbproc) {
+    if (dbproc != NULL) {
+        TdsMessageLog *log = (TdsMessageLog *)dbgetuserdata(dbproc);
+        if (log != NULL) {
+            return log;
+        }
+    }
+    return &threadLog;
+}
 
 static void copyField(char *dest, size_t size, const char *src) {
     snprintf(dest, size, "%s", src ? src : "");
 }
 
-void clearTdsMessages(void) {
-    tdsMessageCount = 0;
-    tdsMessagesSeen = 0;
-    lastErrorMessage[0] = '\0';
-    combinedMessage[0] = '\0';
+void tdsClearMessages(DBPROCESS *dbproc) {
+    TdsMessageLog *log = logFor(dbproc);
+    log->count = 0;
+    log->seen = 0;
+    log->lastError[0] = '\0';
+    log->combined[0] = '\0';
 }
 
 // Message handler to capture detailed SQL Server error messages.
@@ -59,12 +82,13 @@ static int messageHandler(DBPROCESS *dbproc, DBINT msgno, int msgstate, int seve
     if (severity < TDS_MIN_ERROR_SEVERITY) {
         return 0;
     }
-    tdsMessagesSeen++;
+    TdsMessageLog *log = logFor(dbproc);
+    log->seen++;
     // Once full, keep what we have: the earliest messages are the specific ones.
-    if (tdsMessageCount >= MAX_TDS_MESSAGES) {
+    if (log->count >= MAX_TDS_MESSAGES) {
         return 0;
     }
-    TdsMessage *message = &tdsMessages[tdsMessageCount++];
+    TdsMessage *message = &log->messages[log->count++];
     message->number = (long)msgno;
     message->severity = severity;
     message->state = msgstate;
@@ -76,7 +100,9 @@ static int messageHandler(DBPROCESS *dbproc, DBINT msgno, int msgstate, int seve
 }
 
 static int errorHandler(DBPROCESS *dbproc, int severity, int dberr, int oserr, char *dberrstr, char *oserrstr) {
-    snprintf(lastErrorMessage, sizeof(lastErrorMessage), "DB-Lib error %d (severity %d): %s [%s]", dberr, severity, dberrstr, oserrstr ? oserrstr : "no os error");
+    TdsMessageLog *log = logFor(dbproc);
+    snprintf(log->lastError, sizeof(log->lastError), "DB-Lib error %d (severity %d): %s [%s]",
+             dberr, severity, dberrstr ? dberrstr : "", oserrstr ? oserrstr : "no os error");
 
     // A query that outran its timeout should cost the caller that query, not
     // the connection. INT_TIMEOUT has db-lib cancel the running command on the
@@ -92,45 +118,46 @@ static int errorHandler(DBPROCESS *dbproc, int severity, int dberr, int oserr, c
     return INT_CANCEL;
 }
 
-int getTdsMessageCount(void) { return tdsMessageCount; }
+int tdsMessageCount(DBPROCESS *dbproc) { return logFor(dbproc)->count; }
 
-static const TdsMessage* messageAt(int index) {
-    if (index < 0 || index >= tdsMessageCount) { return NULL; }
-    return &tdsMessages[index];
+static const TdsMessage* messageAt(DBPROCESS *dbproc, int index) {
+    TdsMessageLog *log = logFor(dbproc);
+    if (index < 0 || index >= log->count) { return NULL; }
+    return &log->messages[index];
 }
 
-long getTdsMessageNumber(int index) {
-    const TdsMessage *m = messageAt(index);
+long tdsMessageNumber(DBPROCESS *dbproc, int index) {
+    const TdsMessage *m = messageAt(dbproc, index);
     return m ? m->number : 0;
 }
 
-int getTdsMessageSeverity(int index) {
-    const TdsMessage *m = messageAt(index);
+int tdsMessageSeverity(DBPROCESS *dbproc, int index) {
+    const TdsMessage *m = messageAt(dbproc, index);
     return m ? m->severity : 0;
 }
 
-int getTdsMessageState(int index) {
-    const TdsMessage *m = messageAt(index);
+int tdsMessageState(DBPROCESS *dbproc, int index) {
+    const TdsMessage *m = messageAt(dbproc, index);
     return m ? m->state : 0;
 }
 
-int getTdsMessageLine(int index) {
-    const TdsMessage *m = messageAt(index);
+int tdsMessageLine(DBPROCESS *dbproc, int index) {
+    const TdsMessage *m = messageAt(dbproc, index);
     return m ? m->line : 0;
 }
 
-const char* getTdsMessageText(int index) {
-    const TdsMessage *m = messageAt(index);
+const char* tdsMessageText(DBPROCESS *dbproc, int index) {
+    const TdsMessage *m = messageAt(dbproc, index);
     return m ? m->text : "";
 }
 
-const char* getTdsMessageServer(int index) {
-    const TdsMessage *m = messageAt(index);
+const char* tdsMessageServer(DBPROCESS *dbproc, int index) {
+    const TdsMessage *m = messageAt(dbproc, index);
     return m ? m->server : "";
 }
 
-const char* getTdsMessageProcedure(int index) {
-    const TdsMessage *m = messageAt(index);
+const char* tdsMessageProcedure(DBPROCESS *dbproc, int index) {
+    const TdsMessage *m = messageAt(dbproc, index);
     return m ? m->procedure : "";
 }
 
@@ -139,39 +166,57 @@ const char* getTdsMessageProcedure(int index) {
 // message is included, oldest first, because the first one is usually the cause
 // and the later ones the consequence. Fall back to the DB-Lib wrapper message
 // only when the server recorded nothing.
-const char* getLastTdsErrorMessage(void) {
-    if (tdsMessageCount == 0) { return lastErrorMessage; }
+const char* tdsLastErrorMessage(DBPROCESS *dbproc) {
+    TdsMessageLog *log = logFor(dbproc);
+    if (log->count == 0) { return log->lastError; }
 
     size_t offset = 0;
-    for (int i = 0; i < tdsMessageCount; i++) {
-        const TdsMessage *m = &tdsMessages[i];
-        int written = snprintf(combinedMessage + offset, sizeof(combinedMessage) - offset,
+    log->combined[0] = '\0';
+    for (int i = 0; i < log->count; i++) {
+        const TdsMessage *m = &log->messages[i];
+        int written = snprintf(log->combined + offset, sizeof(log->combined) - offset,
                                "%sMsg %ld, Level %d, State %d, Line %d: %s",
                                i == 0 ? "" : " | ",
                                m->number, m->severity, m->state, m->line, m->text);
-        if (written < 0 || (size_t)written >= sizeof(combinedMessage) - offset) {
-            return combinedMessage;
+        if (written < 0 || (size_t)written >= sizeof(log->combined) - offset) {
+            return log->combined;
         }
         offset += (size_t)written;
     }
 
-    int dropped = tdsMessagesSeen - tdsMessageCount;
+    int dropped = log->seen - log->count;
     if (dropped > 0) {
-        snprintf(combinedMessage + offset, sizeof(combinedMessage) - offset,
+        snprintf(log->combined + offset, sizeof(log->combined) - offset,
                  " | (%d further message%s suppressed)", dropped, dropped == 1 ? "" : "s");
     }
-    return combinedMessage;
+    return log->combined;
 }
 
 const char* getDBVersion(void) {
     return dbversion();
 }
 
-// Initialize DB-Library
-int initializeDBLibrary(void) {
+static pthread_once_t dbLibraryOnce = PTHREAD_ONCE_INIT;
+static int dbLibraryStatus = -1;
+
+static void installHandlers(void) {
     dberrhandle(errorHandler);
     dbmsghandle(messageHandler);
-    return dbinit() == SUCCEED ? 0 : -1;
+}
+
+static void initializeDBLibraryOnce(void) {
+    dbLibraryStatus = dbinit() == SUCCEED ? 0 : -1;
+    // After dbinit, which resets the error handler to FreeTDS's default --
+    // and that one calls exit() on a failed connection.
+    installHandlers();
+}
+
+// DB-Library stays initialized for the life of the process. Pairing dbinit
+// with dbexit per connection would be fragile: dbexit closes *every* open
+// connection once its reference count reaches zero.
+int initializeDBLibrary(void) {
+    pthread_once(&dbLibraryOnce, initializeDBLibraryOnce);
+    return dbLibraryStatus;
 }
 
 // Connect to the database
@@ -181,8 +226,11 @@ DBPROCESS* connectToDatabase(const char* server, const char* user, const char* p
     LOGINREC *login;
     DBPROCESS *dbproc;
 
-    clearTdsMessages();
-    dbinit();
+    tdsClearMessages(NULL);
+    if (initializeDBLibrary() != 0) {
+        snprintf(threadLog.lastError, sizeof(threadLog.lastError), "DB-Library initialization failed");
+        return NULL;
+    }
     login = dblogin();
     if (login == NULL) {
         return NULL;
@@ -205,22 +253,32 @@ DBPROCESS* connectToDatabase(const char* server, const char* user, const char* p
     // checks the server certificate only when given a CA file. Set both
     // explicitly so neither depends on defaults or on a freetds.conf.
     if (encryption != NULL && encryption[0] != '\0' && DBSETLENCRYPTION(login, encryption) == FAIL) {
-        snprintf(lastErrorMessage, sizeof(lastErrorMessage), "Invalid encryption setting \"%s\"", encryption);
+        snprintf(threadLog.lastError, sizeof(threadLog.lastError), "Invalid encryption setting \"%s\"", encryption);
         dbloginfree(login);
         return NULL;
     }
     if (dbsetltlsverify(login, caFile, certificateHostName) == FAIL) {
-        snprintf(lastErrorMessage, sizeof(lastErrorMessage), "Could not set TLS certificate verification");
+        snprintf(threadLog.lastError, sizeof(threadLog.lastError), "Could not set TLS certificate verification");
         dbloginfree(login);
         return NULL;
     }
-    dberrhandle(errorHandler);
-    dbmsghandle(messageHandler);
+    // Again here, in case anything else in the process has called dbinit since
+    // (see initializeDBLibraryOnce). The handlers are process-wide and these
+    // are the same values, so concurrent connects can't disagree.
+    installHandlers();
     dbproc = dbopen(login, server);
     dbloginfree(login);
     if (dbproc == NULL) {
         return NULL;
     }
+    // From here on the connection's messages are its own.
+    TdsMessageLog *log = calloc(1, sizeof(TdsMessageLog));
+    if (log == NULL) {
+        dbclose(dbproc);
+        snprintf(threadLog.lastError, sizeof(threadLog.lastError), "Out of memory");
+        return NULL;
+    }
+    dbsetuserdata(dbproc, (BYTE *)log);
     return dbproc;
 }
 
@@ -246,7 +304,7 @@ int setQueryTimeout(DBPROCESS* dbproc, int seconds) {
 
 // Execute a query
 int executeQuery(DBPROCESS* dbproc, const char* query) {
-    clearTdsMessages();
+    tdsClearMessages(dbproc);
     if (dbcmd(dbproc, query) == FAIL) {
         return -1;
     }
@@ -414,6 +472,10 @@ void freeFetchedResults(RowData* rows, int rowCount) {
 
 // Close the connection
 void closeConnection(DBPROCESS* dbproc) {
+    if (dbproc == NULL) {
+        return;
+    }
+    TdsMessageLog *log = (TdsMessageLog *)dbgetuserdata(dbproc);
     dbclose(dbproc);
-    dbexit();
+    free(log);
 }

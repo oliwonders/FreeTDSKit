@@ -8,9 +8,6 @@
 import CFreeTDS
 import Foundation
 
-@_silgen_name("getLastTdsErrorMessage")
-private func getLastTdsErrorMessage() -> UnsafePointer<CChar>?
-
 /// A message reported by SQL Server while running an operation.
 ///
 /// A single failure usually produces more than one: the server sends the
@@ -37,28 +34,64 @@ public struct TDSMessage: Sendable, Hashable, CustomStringConvertible {
     }
 }
 
-/// Messages recorded by the C layer for the most recent operation, oldest first.
-private func collectTdsMessages() -> [TDSMessage] {
-    (0..<Int(getTdsMessageCount())).map { index in
+/// Messages recorded by the C layer for the most recent operation on `dbproc`,
+/// oldest first. A nil `dbproc` reads the messages from a failed connect, which
+/// are kept per thread: read them on the thread that tried to connect.
+func collectTdsMessages(_ dbproc: OpaquePointer?) -> [TDSMessage] {
+    (0..<Int(tdsMessageCount(dbproc))).map { index in
         let i = Int32(index)
         return TDSMessage(
-            number: Int(getTdsMessageNumber(i)),
-            severity: Int(getTdsMessageSeverity(i)),
-            state: Int(getTdsMessageState(i)),
-            line: Int(getTdsMessageLine(i)),
-            text: String(cString: getTdsMessageText(i)),
-            server: String(cString: getTdsMessageServer(i)),
-            procedure: String(cString: getTdsMessageProcedure(i))
+            number: Int(tdsMessageNumber(dbproc, i)),
+            severity: Int(tdsMessageSeverity(dbproc, i)),
+            state: Int(tdsMessageState(dbproc, i)),
+            line: Int(tdsMessageLine(dbproc, i)),
+            text: String(cString: tdsMessageText(dbproc, i)),
+            server: String(cString: tdsMessageServer(dbproc, i)),
+            procedure: String(cString: tdsMessageProcedure(dbproc, i))
         )
     }
 }
 
-/// The text of the last failure, falling back to `fallback` when neither the
-/// server nor DB-Library recorded anything.
-private func lastTdsFailureReason(fallback: String) -> String {
-    guard let raw = getLastTdsErrorMessage() else { return fallback }
+/// The text of the last failure on `dbproc` (nil: a failed connect on this
+/// thread), falling back to `fallback` when nothing was recorded.
+func lastTdsFailureReason(_ dbproc: OpaquePointer?, fallback: String) -> String {
+    guard let raw = tdsLastErrorMessage(dbproc) else { return fallback }
     let reason = String(cString: raw)
     return reason.isEmpty ? fallback : reason
+}
+
+/// A failed query on `dbproc`, with whatever the server and DB-Library said.
+private func queryFailure(_ dbproc: OpaquePointer) -> TDSConnectionError {
+    .queryExecutionFailed(
+        reason: lastTdsFailureReason(dbproc, fallback: "Query failed"),
+        messages: collectTdsMessages(dbproc)
+    )
+}
+
+/// Column names, taken from the first row.
+private func columnNames(_ rows: UnsafeMutablePointer<RowData>, count: Int32) -> [String] {
+    guard count > 0 else { return [] }
+    let row = rows[0]
+    return (0..<Int(row.columnCount)).compactMap { j in
+        row.columnNames?[j].map { String(cString: $0) }
+    }
+}
+
+/// One row as a dictionary of typed values.
+private func rowDictionary(_ row: RowData) -> [String: SQLDataType] {
+    var dict: [String: SQLDataType] = [:]
+    for j in 0..<Int(row.columnCount) {
+        guard
+            let namePtr = row.columnNames?[j],
+            let valPtr = row.columnValues?[j]
+        else { continue }
+        dict[String(cString: namePtr)] = determineSQLType(
+            valPtr,
+            length: row.columnLengths.map { Int($0[j]) },
+            columnType: Int(row.columnTypes?[j] ?? 0)
+        )
+    }
+    return dict
 }
 
 /// Default seconds to wait for a login to complete.
@@ -177,13 +210,9 @@ public struct ConnectionConfiguration: Sendable {
 }
 
 public actor TDSConnection {
-    private var connection: OpaquePointer?
-
-    /// Actor-isolated raw pointer bit-pattern for send across tasks.
-    private var rawConnection: Int? {
-        guard let conn = connection else { return nil }
-        return Int(bitPattern: conn)
-    }
+    /// The open connection. Every DB-Library call on it goes through the
+    /// handle's serial queue; see `ConnectionHandle`.
+    private let handle: ConnectionHandle
 
     /// Initialize a connection using a Configuration.
     public init(configuration: ConnectionConfiguration) throws {
@@ -259,14 +288,9 @@ public actor TDSConnection {
             throw TDSConnectionError.connectionFailed(reason: error.reason)
         }
 
-        let dbInit = initializeDBLibrary()
-        if dbInit != 0 {
-            throw TDSConnectionError.connectionFailed(
-                reason: lastTdsFailureReason(fallback: "DB init failed"),
-                messages: collectTdsMessages()
-            )
-        }
-        self.connection = connectToDatabase(
+        // Synchronous, so the messages from a failed login are read on the
+        // same thread that recorded them.
+        guard let dbproc = connectToDatabase(
             server,
             username,
             password,
@@ -275,111 +299,58 @@ public actor TDSConnection {
             encryption.freeTDSValue,
             caFile,
             hostNameInCertificate
-        )
-        guard let connection = self.connection else {
+        ) else {
             throw TDSConnectionError.connectionFailed(
-                reason: lastTdsFailureReason(fallback: "Connection failed"),
-                messages: collectTdsMessages()
+                reason: lastTdsFailureReason(nil, fallback: "Connection failed"),
+                messages: collectTdsMessages(nil)
             )
         }
-        if setQueryTimeout(connection, Int32(queryTimeout)) != 0 {
-            self.connection = nil
-            closeConnection(connection)
-            throw TDSConnectionError.connectionFailed(
+        if setQueryTimeout(dbproc, Int32(queryTimeout)) != 0 {
+            let error = TDSConnectionError.connectionFailed(
                 reason: lastTdsFailureReason(
-                    fallback: "Could not set a query timeout of \(queryTimeout)s"
+                    dbproc, fallback: "Could not set a query timeout of \(queryTimeout)s"
                 ),
-                messages: collectTdsMessages()
+                messages: collectTdsMessages(dbproc)
             )
+            closeConnection(dbproc)
+            throw error
         }
+        self.handle = ConnectionHandle(dbproc, label: server)
     }
 
     public func execute(queryString: String) async throws -> SQLResult {
-        guard let connection = connection else {
-            throw TDSConnectionError.notConnected
-        }
-
-        let connRaw = Int(bitPattern: connection)
-
-        return try await Task.detached(priority: .userInitiated) {
-            let conn = OpaquePointer(bitPattern: connRaw)!
-            let success = executeQuery(conn, queryString)
-            if success != 0 {
-                throw TDSConnectionError.queryExecutionFailed(
-                    reason: lastTdsFailureReason(fallback: "Query failed"),
-                    messages: collectTdsMessages()
-                )
+        try await handle.run { conn throws(TDSConnectionError) in
+            guard executeQuery(conn, queryString) == 0 else {
+                throw queryFailure(conn)
             }
 
             var rowCount: Int32 = 0
             guard let cRows = fetchResultsWithType(conn, &rowCount) else {
-                throw TDSConnectionError.queryExecutionFailed(
-                    reason: lastTdsFailureReason(fallback: "Query failed"),
-                    messages: collectTdsMessages()
-                )
+                throw queryFailure(conn)
             }
             defer { freeFetchedResults(cRows, rowCount) }
 
-            var results: [[String: SQLDataType]] = []
-            var columnNames: [String] = []
-
-            if rowCount > 0 {
-                let firstRow = cRows[0]
-                for j in 0..<Int(firstRow.columnCount) {
-                    if let colName = firstRow.columnNames?[j] {
-                        columnNames.append(String(cString: colName))
-                    }
-                }
-            }
-
-            for i in 0..<Int(rowCount) {
-                let row = cRows[i]
-                if columnNames.isEmpty {
-                    for j in 0..<Int(row.columnCount) {
-                        if let cName = row.columnNames?[j] {
-                            columnNames.append(String(cString: cName))
-                        }
-                    }
-                }
-
-                var dict: [String: SQLDataType] = [:]
-                for j in 0..<Int(row.columnCount) {
-                    guard
-                        let namePtr = row.columnNames?[j],
-                        let valPtr = row.columnValues?[j]
-                    else { continue }
-
-                    let key = String(cString: namePtr)
-                    let value = determineSQLType(
-                        valPtr,
-                        length: row.columnLengths.map { Int($0[j]) },
-                        columnType: Int(row.columnTypes?[j] ?? 0)
-                    )
-                    dict[key] = value
-                }
-                results.append(dict)
-            }
-
-            let affectedRows = Int(dbcount(conn))
+            let rows = (0..<Int(rowCount)).map { rowDictionary(cRows[$0]) }
             return SQLResult(
-                columns: columnNames,
-                rows: results,
-                affectedRows: affectedRows
+                columns: columnNames(cRows, count: rowCount),
+                rows: rows,
+                affectedRows: Int(dbcount(conn))
             )
-        }.value
+        }
     }
 
     @available(*, deprecated, renamed: "close()")
-    public func disconnect() {
-        close()
+    public func disconnect() async {
+        await close()
     }
 
-    /// Close the database connection.
-    public func close() {
-        if let connection = connection {
-            closeConnection(connection)
-            self.connection = nil
-        }
+    /// Close the database connection, after any query already running on it
+    /// finishes. Queries started afterwards fail with `.notConnected`.
+    ///
+    /// A connection that is never closed is closed when the `TDSConnection` is
+    /// released, but closing explicitly ends the server session promptly.
+    public func close() async {
+        await handle.close()
     }
 
     /// Execute the given SQL query and return an async sequence of row dictionaries.
@@ -388,78 +359,33 @@ public actor TDSConnection {
     public nonisolated func query(query: String) -> AsyncThrowingStream<
         [String: SQLDataType], Error
     > {
-        AsyncThrowingStream { continuation in
-            Task.detached(priority: .userInitiated) {
-                defer { continuation.finish() }
+        let handle = self.handle
+        return AsyncThrowingStream { continuation in
+            let cancellation = CancellationFlag()
+            continuation.onTermination = { _ in cancellation.cancel() }
 
-                let maybeRaw = await self.rawConnection
-                guard let connRaw = maybeRaw else {
-                    continuation.finish(
-                        throwing: TDSConnectionError.notConnected
-                    )
+            handle.enqueue { conn in
+                guard let conn else {
+                    continuation.finish(throwing: TDSConnectionError.notConnected)
                     return
                 }
-                let conn = OpaquePointer(bitPattern: connRaw)!
                 guard executeQuery(conn, query) == 0 else {
-                    continuation.finish(
-                        throwing: TDSConnectionError.queryExecutionFailed(
-                            reason: lastTdsFailureReason(fallback: "Query failed"),
-                            messages: collectTdsMessages()
-                        )
-                    )
+                    continuation.finish(throwing: queryFailure(conn))
                     return
                 }
 
                 var rowCount: Int32 = 0
                 guard let cRows = fetchResultsWithType(conn, &rowCount) else {
-                    continuation.finish(
-                        throwing: TDSConnectionError.queryExecutionFailed(
-                            reason: lastTdsFailureReason(fallback: "Query failed"),
-                            messages: collectTdsMessages()
-                        )
-                    )
+                    continuation.finish(throwing: queryFailure(conn))
                     return
                 }
                 defer { freeFetchedResults(cRows, rowCount) }
 
-                var columnNames: [String] = []
-                if rowCount > 0 {
-                    let firstRow = cRows[0]
-                    for j in 0..<Int(firstRow.columnCount) {
-                        if let cName = firstRow.columnNames?[j] {
-                            columnNames.append(String(cString: cName))
-                        }
-                    }
-                }
-
                 for i in 0..<Int(rowCount) {
-                    if Task.isCancelled { break }
-                    let row = cRows[i]
-                    if columnNames.isEmpty {
-                        for j in 0..<Int(row.columnCount) {
-                            if let cName = row.columnNames?[j] {
-                                columnNames.append(String(cString: cName))
-                            }
-                        }
-                    }
-
-                    var dict: [String: SQLDataType] = [:]
-                    for j in 0..<Int(row.columnCount) {
-                        guard
-                            let namePtr = row.columnNames?[j],
-                            let valPtr = row.columnValues?[j]
-                        else { continue }
-
-                        let key = String(cString: namePtr)
-                        let value = determineSQLType(
-                            valPtr,
-                            length: row.columnLengths.map { Int($0[j]) },
-                            columnType: Int(row.columnTypes?[j] ?? 0)
-                        )
-                        dict[key] = value
-                    }
-                    continuation.yield(dict)
+                    if cancellation.isCancelled { break }
+                    continuation.yield(rowDictionary(cRows[i]))
                 }
+                continuation.finish()
             }
         }
     }
