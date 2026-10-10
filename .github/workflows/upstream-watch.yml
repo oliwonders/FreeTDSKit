@@ -1,0 +1,70 @@
+# Opens an issue when OpenSSL or FreeTDS publishes a release newer than the one
+# vendored in Frameworks/FreeTDS.xcframework. Both are compiled into every app
+# that uses FreeTDSKit and don't update with macOS, so a fix upstream reaches
+# users only when the XCFramework is rebuilt and a new FreeTDSKit is tagged.
+name: Upstream release watch
+
+on:
+  schedule:
+    - cron: "17 13 * * 1"   # Mondays, 13:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare vendored versions with upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          script=Support/buildandlinkfreetds.sh
+          openssl_current=$(sed -n 's/^OPENSSL_VERSION="\(.*\)"$/\1/p' "$script")
+          freetds_current=$(sed -n 's/^FREETDS_VERSION="\(.*\)"$/\1/p' "$script")
+          echo "Vendored: OpenSSL $openssl_current, FreeTDS $freetds_current"
+
+          # Stay on the vendored OpenSSL series (3.5 is an LTS, supported to
+          # 2030); security fixes ship as patch releases within it.
+          series="${openssl_current%.*}"
+          openssl_latest=$(gh api "repos/openssl/openssl/releases?per_page=100" --jq '.[].tag_name' \
+            | grep -E "^openssl-${series//./\\.}\.[0-9]+$" | sed 's/^openssl-//' | sort -V | tail -1)
+
+          # GitHub releases for FreeTDS lag behind; freetds.org is authoritative.
+          freetds_latest=$(curl -fsSL https://www.freetds.org/files/stable/ \
+            | grep -oE 'freetds-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' \
+            | sed 's/^freetds-//; s/\.tar\.gz$//' | sort -uV | tail -1)
+          echo "Upstream: OpenSSL $openssl_latest, FreeTDS $freetds_latest"
+
+          # True when $2 is a newer version than $1.
+          newer() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" = "$2" ]; }
+
+          open_issue() {
+            local title="$1" body="$2"
+            if gh issue list --state open --limit 100 --json title --jq '.[].title' | grep -qxF "$title"; then
+              echo "Already open: $title"
+              return
+            fi
+            gh issue create --title "$title" --body "$body" --label security \
+              || gh issue create --title "$title" --body "$body"
+          }
+
+          steps=$'1. Update the version and SHA-256 in `Support/buildandlinkfreetds.sh` (take the checksum from upstream, not from your own download).\n2. Run `./Support/buildandlinkfreetds.sh`. A FreeTDS patch that no longer applies stops the build; see `Support/patches/README.md`.\n3. Run `swift test`, and `FREETDSKIT_TLS_TEST_HOST=<azure host> swift test --filter TLSVerification`.\n4. Commit, tag a new FreeTDSKit release, and update the apps that use it.'
+
+          if [ -n "$openssl_latest" ] && newer "$openssl_current" "$openssl_latest"; then
+            notes=$(gh api "repos/openssl/openssl/releases/tags/openssl-$openssl_latest" --jq .body | head -40)
+            kind="release"
+            if grep -qi "security" <<<"$notes"; then kind="SECURITY release"; fi
+            open_issue "OpenSSL $openssl_latest is out ($kind; FreeTDSKit ships $openssl_current)" \
+              "https://github.com/openssl/openssl/releases/tag/openssl-$openssl_latest"$'\n\n```\n'"$notes"$'\n```\n\n'"$steps"
+          fi
+
+          if [ -n "$freetds_latest" ] && newer "$freetds_current" "$freetds_latest"; then
+            open_issue "FreeTDS $freetds_latest is out (FreeTDSKit ships $freetds_current)" \
+              "https://www.freetds.org/files/stable/ — check the ChangeLog/NEWS in the tarball for security fixes."$'\n\n'"$steps"
+          fi
