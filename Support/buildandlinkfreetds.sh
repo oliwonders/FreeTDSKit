@@ -186,4 +186,16 @@ if strings -a "$lib" | grep -q -e "$BUILD_DIR" -e "$HOME"; then
 fi
 grep -q "dbsetltlsverify" "$XCFRAMEWORK"/*/Headers/sybdb.h || { echo "❌ FreeTDS patches missing from headers"; exit 1; }
 
+# Sign the XCFramework so an app's build can tell where it came from and that
+# it hasn't changed since; Apple expects third-party binary SDKs to be signed.
+# Use a Developer ID Application or Apple Distribution identity (name or SHA-1,
+# from `security find-identity -v -p codesigning`).
+if [ -n "${FREETDSKIT_CODESIGN_IDENTITY:-}" ]; then
+    echo "==> Signing $XCFRAMEWORK"
+    codesign --timestamp --sign "$FREETDSKIT_CODESIGN_IDENTITY" "$XCFRAMEWORK"
+    codesign --verify --strict --verbose=2 "$XCFRAMEWORK"
+else
+    echo "⚠️  Not signed. Set FREETDSKIT_CODESIGN_IDENTITY and run again before tagging a release."
+fi
+
 echo "✅ FreeTDS $FREETDS_VERSION + OpenSSL $OPENSSL_VERSION -> Frameworks/FreeTDS.xcframework"

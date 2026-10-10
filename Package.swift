@@ -34,6 +34,12 @@ let package = Package(
             name: "FreeTDSKit",
             dependencies: [
                 "CFreeTDS",
+            ],
+            // Declares the required-reason APIs that FreeTDS and OpenSSL call
+            // (stat and friends: the file-timestamp category). They are linked
+            // statically, so the calls end up in the app's own binary.
+            resources: [
+                .copy("PrivacyInfo.xcprivacy")
             ]
         ),
         .testTarget(

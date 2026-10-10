@@ -40,6 +40,12 @@ To check what a build actually linked, `otool -L` should show no `libsybdb`, `li
 
 Because everything is static and universal, the package is suitable for sandboxed and Mac App Store apps. Such an app still needs the `com.apple.security.network.client` entitlement to reach SQL Server, and it cannot read `/usr/local/etc/freetds.conf` or `~/.freetds.conf` from inside the sandbox.
 
+## App Store Notes
+
+- **Privacy manifest.** FreeTDS and OpenSSL call `stat`, `fstat` and `lstat`, which Apple lists as required-reason APIs (file timestamps). FreeTDSKit ships a `PrivacyInfo.xcprivacy` declaring reason `C617.1` in its resource bundle. Because the libraries are linked statically, those calls end up in the app's own binary, so declare the same reason in the app's privacy manifest too.
+- **Signed XCFramework.** `Frameworks/FreeTDS.xcframework` is signed with a Developer ID Application certificate; `codesign -dvv Frameworks/FreeTDS.xcframework` shows by whom. The build script re-signs when `FREETDSKIT_CODESIGN_IDENTITY` is set. A rebuilt framework is unsigned until then, so sign before tagging a release.
+- **Sandbox.** Needs the outgoing network connections entitlement (`com.apple.security.network.client`). The macOS root certificates are exported to the app container's caches folder, so no other file access is required.
+
 ## Client Usage
 
 First add FreeTDSKit to your application in Xcode or run this:

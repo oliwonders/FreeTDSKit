@@ -209,6 +209,34 @@ public struct ConnectionConfiguration: Sendable {
     }
 }
 
+// The password must not reach logs or crash reports through string
+// interpolation, print(), dump() or the debugger, which by default show every
+// stored property.
+extension ConnectionConfiguration: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    public var description: String {
+        "ConnectionConfiguration(host: \(host), port: \(port), username: \(username), password: <redacted>, "
+            + "database: \(database), encryption: \(encryption), trustServerCertificate: \(trustServerCertificate))"
+    }
+
+    public var debugDescription: String { description }
+
+    public var customMirror: Mirror {
+        Mirror(self, children: [
+            "host": host,
+            "port": port,
+            "username": username,
+            "password": "<redacted>",
+            "database": database,
+            "loginTimeout": loginTimeout,
+            "queryTimeout": queryTimeout,
+            "encryption": encryption,
+            "trustServerCertificate": trustServerCertificate,
+            "certificateAuthorityFile": certificateAuthorityFile as Any,
+            "hostNameInCertificate": hostNameInCertificate as Any,
+        ], displayStyle: .struct)
+    }
+}
+
 public actor TDSConnection {
     /// The open connection. Every DB-Library call on it goes through the
     /// handle's serial queue; see `ConnectionHandle`.
