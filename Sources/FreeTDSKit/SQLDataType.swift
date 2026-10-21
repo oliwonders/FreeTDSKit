@@ -126,9 +126,14 @@ public struct TDSDateTimeOffset: Equatable, Codable,
     }
 }
 
-//these are not available via FreeTDS
-public let SYBGEOGRAPHY: Int = 240  // Actual value from SQL Server
-public let SYBGEOMETRY: Int = 241  // Actual value from SQL Server
+/// SQL Server's user-defined-type wire type (SYBMSUDT). geography and
+/// geometry both arrive as this, as does hierarchyid.
+public let SYBGEOGRAPHY: Int = 240
+/// SQL Server's xml wire type (SYBMSXML), despite the name: geometry arrives
+/// as 240, like geography.
+@available(*, deprecated, message: "241 is SQL Server's xml type; geometry arrives as SYBGEOGRAPHY (240).")
+public let SYBGEOMETRY: Int = 241
+private let SYBMSXML: Int = 241
 
 /// `length` is the value's byte count. Pass it for binary columns, which can
 /// contain zero bytes; when nil the value is read up to its NUL terminator.
@@ -348,10 +353,18 @@ func determineSQLType(_ colValue: UnsafePointer<CChar>, length: Int? = nil, colu
         if let value = Decimal(string: String(cString: colValue)) {
             return .decimal(value)
         }
-    case SYBGEOGRAPHY, SYBGEOMETRY:
-        let colAsString = String(cString: colValue)
-        let spatialWKT = SQLDataType.WKTString(value: colAsString)
-        return .spatial(spatialWKT)
+    case SYBGEOGRAPHY:
+        // Binary, and an SRID starts it with zero bytes: reading it as a C
+        // string cut it off after a byte or two. Decode the whole value;
+        // anything that isn't geography or geometry stays binary.
+        let data = Data(bytes: colValue, count: length ?? strlen(colValue))
+        if let wkt = SQLServerSpatial.wkt(fromSerialized: data) {
+            return .spatial(SQLDataType.WKTString(value: wkt))
+        }
+        return .binary(data)
+    case SYBMSXML:
+        let data = Data(bytes: colValue, count: length ?? strlen(colValue))
+        return .text(String(decoding: data, as: UTF8.self))
     default:
         print("Unknown column type: \(columnType)")
         return .null

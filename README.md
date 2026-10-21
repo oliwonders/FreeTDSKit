@@ -106,6 +106,16 @@ certificate, so a server without TLS, or anyone between client and server, got
 the login and the data. A server that previously connected without these
 settings may now need `trustServerCertificate` or `certificateAuthorityFile`.
 
+### Spatial values
+
+`geography` and `geometry` columns come back as `.spatial`, holding WKT in the form `STAsText()` produces (`POINT (-122.35 47.65)`: longitude first for geography). They don't need `.STAsText()` in the query, so it doesn't matter how the value was produced: a plain column, a computed value such as `SpatialPoint.STBuffer(50)`, any arm of a `UNION`, a CTE or a stored procedure all work.
+
+SQL Server sends these values in its own binary format ([MS-SSCLRT]), which `SQLServerSpatial.wkt(fromSerialized:)` decodes. Points, line strings, polygons (with holes), their multi- forms and geometry collections are supported. Curves (`CIRCULARSTRING`, `COMPOUNDCURVE`, `CURVEPOLYGON`) and `FULLGLOBE` come back as `.binary`, as do other user-defined types such as `hierarchyid`. Z and M values are dropped.
+
+The bytes don't say whether a value is geography (latitude stored first) or geometry (x first). A value is read as geography when it has an SRID and every stored first coordinate is a valid latitude. A `geometry` value with an SRID whose x values all fall within ±90 would be read with its axes swapped; give such columns `.STAsText()` in the query.
+
+[MS-SSCLRT]: https://learn.microsoft.com/openspecs/sql_server_protocols/ms-ssclrt/
+
 ### Errors
 
 `TDSConnectionError` carries the messages SQL Server sent for the failure, oldest
@@ -273,7 +283,7 @@ Integration tests exercise real SQL Server connectivity and query behavior throu
 - streaming queries
 - `Decodable` row mapping
 - binary data handling
-- spatial/geography fields
+- spatial fields: geography and geometry decoded from SQL Server's binary format and checked against `STAsText()`, including inside a `UNION`
 - insert/update/delete paths
 
 The integration test fixture creates a SQL Server 2022 container and loads `db-setup.sql`, which provisions:

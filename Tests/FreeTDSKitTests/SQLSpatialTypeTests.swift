@@ -12,27 +12,41 @@ import XCTest
 
 @Suite("Miscellaneous SQLDataType Tests") struct SQLSpatialTypeTests {
 
-    @Test("Test geometry spatial data WKT")
-    func spatialGeometryData() {
-        let wkt = "POINT(30.123456 -97.123456)"
-        let cString = wkt.cString(using: .utf8)!
-        let sqlType = determineSQLType(cString, columnType: SYBGEOMETRY)
-        if case let .spatial(value) = sqlType {
-            #expect(value.value == wkt)
-        } else {
-            Issue.record("Expected SQLDataType.spatial")
+    // geography and geometry both arrive as user-defined type 240, in SQL
+    // Server's binary format, never as WKT text; SQLServerSpatialTests covers
+    // decoding them. (These tests used to feed WKT text in as 240 and 241.)
+
+    /// 241 is SQL Server's xml type, not geometry.
+    @Test("xml columns are text")
+    func xmlColumnIsText() {
+        let xml = "<territory name=\"NY181\"/>"
+        let bytes = Array(xml.utf8)
+        let sqlType = bytes.withUnsafeBufferPointer { buffer in
+            buffer.withMemoryRebound(to: CChar.self) {
+                determineSQLType($0.baseAddress!, length: bytes.count, columnType: 241)
+            }
         }
+        guard case .text(let value) = sqlType else {
+            Issue.record("Expected SQLDataType.text, got \(sqlType)")
+            return
+        }
+        #expect(value == xml)
     }
-    
-    @Test("Test geography spatial data WKT")
-    func spatialGeographyData() {
-        let wkt = "POINT(30.123456 -97.123456)"
-        let cString = wkt.cString(using: .utf8)!
-        let sqlType = determineSQLType(cString, columnType: SYBGEOGRAPHY)
-        if case let .spatial(value) = sqlType {
-            #expect(value.value == wkt)
-        } else {
-            Issue.record("Expected SQLDataType.spatial")
+
+    /// Text where binary was expected is no spatial value: kept as bytes
+    /// rather than reported as WKT.
+    @Test("non-spatial user-defined values stay binary")
+    func wktTextAsUserDefinedTypeIsNotSpatial() {
+        let bytes = Array("POINT(30.123456 -97.123456)".utf8)
+        let sqlType = bytes.withUnsafeBufferPointer { buffer in
+            buffer.withMemoryRebound(to: CChar.self) {
+                determineSQLType($0.baseAddress!, length: bytes.count, columnType: SYBGEOGRAPHY)
+            }
         }
+        guard case .binary(let data) = sqlType else {
+            Issue.record("Expected SQLDataType.binary, got \(sqlType)")
+            return
+        }
+        #expect(data == Data(bytes))
     }
 }
