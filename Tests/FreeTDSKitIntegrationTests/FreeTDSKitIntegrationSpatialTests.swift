@@ -20,6 +20,11 @@ final class FreeTDSKitIntegrationSpatialTests: FreeTDSKitIntegrationTestCase {
 
     func testSpatialColumnsDecodeLikeSTAsText() async throws {
         let connection = try makeConnection()
+        // The comparison text is nvarchar(max), which arrives cut at
+        // TEXTSIZE -- 4096 bytes by default. STBuffer(50)'s 129 points take
+        // over 10 KB, and the decoded shape (not truncated) then had more
+        // points than the text it's checked against.
+        _ = try await connection.execute(queryString: "SET TEXTSIZE 2147483647")
         for expression in expressions {
             let result = try await connection.execute(
                 queryString: "SELECT \(expression) AS g, (\(expression)).STAsText() AS wkt"

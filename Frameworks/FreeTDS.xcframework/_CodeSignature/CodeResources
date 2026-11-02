@@ -4,151 +4,198 @@
 <dict>
 	<key>files</key>
 	<dict>
-		<key>macos-arm64_x86_64/Headers/bkpublic.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/FreeTDS</key>
+		<data>
+		KLtfopLGRIViZSbb166aioKWYSk=
+		</data>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/bkpublic.h</key>
 		<data>
 		m85KOjSz3s7k7oANORm6Ef7TYbA=
 		</data>
-		<key>macos-arm64_x86_64/Headers/cspublic.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/cspublic.h</key>
 		<data>
 		+Guvj7pd58Xwd6U7kISxnQZj/mQ=
 		</data>
-		<key>macos-arm64_x86_64/Headers/cstypes.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/cstypes.h</key>
 		<data>
 		5mAdwnHuMtHIIW9m1bpLEWhklfw=
 		</data>
-		<key>macos-arm64_x86_64/Headers/ctpublic.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/ctpublic.h</key>
 		<data>
 		EZlQHQGG/cEd16RXdm7eTFdIMHw=
 		</data>
-		<key>macos-arm64_x86_64/Headers/module.modulemap</key>
-		<data>
-		yShaqgJET6hblnKHUe8dn4M7Xrg=
-		</data>
-		<key>macos-arm64_x86_64/Headers/odbcss.h</key>
-		<data>
-		/zPc7Omku6YJFhigNkwZ2khuuwY=
-		</data>
-		<key>macos-arm64_x86_64/Headers/sqldb.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/sqldb.h</key>
 		<data>
 		v1W9yRvq0/LS2E/9rXtTV+UhpeY=
 		</data>
-		<key>macos-arm64_x86_64/Headers/sqlfront.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/sqlfront.h</key>
 		<data>
 		HEJluNZETwiJUn6JUJG0cY0koB8=
 		</data>
-		<key>macos-arm64_x86_64/Headers/sybdb.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/sybdb.h</key>
 		<data>
 		0WYx/2hGt7vy1900dHHpHlD3DXM=
 		</data>
-		<key>macos-arm64_x86_64/Headers/syberror.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/syberror.h</key>
 		<data>
 		BnGlvblnY15ibvQgLm11yH+5CPw=
 		</data>
-		<key>macos-arm64_x86_64/Headers/sybfront.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/sybfront.h</key>
 		<data>
 		MDQAJ/vFuSVhdKtO6kpDMZRubLY=
 		</data>
-		<key>macos-arm64_x86_64/Headers/tds_sysdep_public.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/tds_sysdep_public.h</key>
 		<data>
 		TOP2GTlPMawS/fNOyjoOHYpXj/Y=
 		</data>
-		<key>macos-arm64_x86_64/libfreetds.a</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Modules/module.modulemap</key>
 		<data>
-		XhLONqMqiWsCO5Mb3uhk8Gj9iU4=
+		vCruLov0tb8fEdxw1k6jqhGq4zE=
+		</data>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Resources/Info.plist</key>
+		<data>
+		cYZvQVKokEm4KBIq7c0XkMGH9bw=
+		</data>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Resources/PrivacyInfo.xcprivacy</key>
+		<data>
+		9I4cJa7cvdVu3Cv9BoBgZAldWVc=
+		</data>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/_CodeSignature/CodeResources</key>
+		<data>
+		j3V6lldAM2Y5veBOYyY1Z0oVnBk=
 		</data>
 	</dict>
 	<key>files2</key>
 	<dict>
-		<key>macos-arm64_x86_64/Headers/bkpublic.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/FreeTDS</key>
+		<dict>
+			<key>symlink</key>
+			<string>Versions/Current/FreeTDS</string>
+		</dict>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Headers</key>
+		<dict>
+			<key>symlink</key>
+			<string>Versions/Current/Headers</string>
+		</dict>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Modules</key>
+		<dict>
+			<key>symlink</key>
+			<string>Versions/Current/Modules</string>
+		</dict>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Resources</key>
+		<dict>
+			<key>symlink</key>
+			<string>Versions/Current/Resources</string>
+		</dict>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/FreeTDS</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			FM8K3vpLWYfALLKH9uuz5hXhwUh8KLSQzSklvq8fLoA=
+			</data>
+		</dict>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/bkpublic.h</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			5a0a0X99660mPZPY9Vgr5MMX9VOLUmTEuWWJWKzj+8g=
 			</data>
 		</dict>
-		<key>macos-arm64_x86_64/Headers/cspublic.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/cspublic.h</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			Wi8dJ9WGi1syWG37rya+9HKb5Sw7Nnjva/60On7jenk=
 			</data>
 		</dict>
-		<key>macos-arm64_x86_64/Headers/cstypes.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/cstypes.h</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			2aZk7kYRYikqvl9onJOaMQoAKMwga6oBufQCCL65cN0=
 			</data>
 		</dict>
-		<key>macos-arm64_x86_64/Headers/ctpublic.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/ctpublic.h</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			HNJ+OrfBSyL86PdkA4vvHH/+pAgQL3ucOiCxcpkT2Vs=
 			</data>
 		</dict>
-		<key>macos-arm64_x86_64/Headers/module.modulemap</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			+xf1E4Oz1meRIKZhYbZtiuppCUA9Rk4sV4IiHClSyTY=
-			</data>
-		</dict>
-		<key>macos-arm64_x86_64/Headers/odbcss.h</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			U8/kUS0a8O7BYOwXHzYA+nzywFjkWQsXIQzXG7Rvj9E=
-			</data>
-		</dict>
-		<key>macos-arm64_x86_64/Headers/sqldb.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/sqldb.h</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			Q2PJAdEmkRi+uR5I+ygUttGXD6k+iZDz5LBdTp7TqJo=
 			</data>
 		</dict>
-		<key>macos-arm64_x86_64/Headers/sqlfront.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/sqlfront.h</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			YpoqKulTwXI5y9xt0aHzkAx2Ig+VRMvHW2KC3kJ+EXc=
 			</data>
 		</dict>
-		<key>macos-arm64_x86_64/Headers/sybdb.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/sybdb.h</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			td1FG/90YUDOsInYcKdAoyutY8KRqlKpdkOoKFVJM5k=
 			</data>
 		</dict>
-		<key>macos-arm64_x86_64/Headers/syberror.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/syberror.h</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			IZpmiE73T65lY5HNkAvwy0//TPSALCqOfZaD293TQKA=
 			</data>
 		</dict>
-		<key>macos-arm64_x86_64/Headers/sybfront.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/sybfront.h</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			ARdHoiitla4R16wJ1eTQmepBre6Hi6Iz8OSnhCWwn9o=
 			</data>
 		</dict>
-		<key>macos-arm64_x86_64/Headers/tds_sysdep_public.h</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/tds_sysdep_public.h</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			J8yLU5AKzhkhszmpZGeNIMoLiJCFQ217z0Jd+/mGhB0=
 			</data>
 		</dict>
-		<key>macos-arm64_x86_64/libfreetds.a</key>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Modules/module.modulemap</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			5cgkFCtJRTdQlXjEw1FDergQsQPjqVnQnSFxqsD3gp0=
+			fvqHk++kDtiXQkV84tGmDx3ILJDoncnZIeo12Jjhhr4=
 			</data>
+		</dict>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Resources/Info.plist</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			2KqQRpHIHdOokyXkHPmVm8JV6W4+AtrfnTf3O8L/gdw=
+			</data>
+		</dict>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Resources/PrivacyInfo.xcprivacy</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			RPTaftm2pQhlwuuAqDDO9HzxK9CPRkNhYwM9H9tMNtQ=
+			</data>
+		</dict>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/_CodeSignature/CodeResources</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			l/EHfMUzuiMqaE6clIrYYKC1Hw8Yu1BwxJyQeQhewLg=
+			</data>
+		</dict>
+		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/Current</key>
+		<dict>
+			<key>symlink</key>
+			<string>A</string>
 		</dict>
 	</dict>
 	<key>rules</key>

@@ -1,11 +1,16 @@
 #!/bin/bash
-# Build OpenSSL and FreeTDS as static, universal (arm64 + x86_64) macOS
-# libraries and package them as Frameworks/FreeTDS.xcframework, which
-# Package.swift consumes as a binary target.
+# Build OpenSSL and FreeTDS for macOS (arm64 + x86_64) as one dynamic
+# framework, FreeTDS.framework, packaged as Frameworks/FreeTDS.xcframework,
+# which Package.swift consumes as a binary target.
+#
+# Dynamic, so an app embeds FreeTDS as a separate library its users could
+# replace with their own build, as the LGPL asks -- static linking would
+# oblige every app to offer its object files for relinking. OpenSSL (Apache
+# 2.0) is linked into the framework statically.
 #
 # The binary target is what lets FreeTDSKit be used as a remote SwiftPM
 # dependency: SwiftPM refuses unsafeFlags in any package that isn't the root,
-# so the archives can't be linked by path from the manifest.
+# so the libraries can't be linked by path from the manifest.
 set -euo pipefail
 
 MACOSX_DEPLOYMENT_TARGET="15.0"
@@ -24,6 +29,8 @@ PACKAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
 UNIVERSAL_DIR="$BUILD_DIR/universal"
 XCFRAMEWORK="$PACKAGE_DIR/Frameworks/FreeTDS.xcframework"
+FRAMEWORK="$UNIVERSAL_DIR/FreeTDS.framework"
+PRIVACY_MANIFEST="$SCRIPT_DIR/FreeTDS-PrivacyInfo.xcprivacy"
 PATCH_DIR="$SCRIPT_DIR/patches"
 # Where the libraries *think* they are installed. FreeTDS and OpenSSL compile
 # their prefix into the binary as the place to look for freetds.conf,
@@ -113,70 +120,112 @@ build_arch() {
         make install DESTDIR="$stage_dir"
     )
 
-    # One archive per arch holding FreeTDS and the OpenSSL it was built
-    # against, so the xcframework is a single library and the three can never
-    # drift apart.
-    libtool -static -no_warning_for_no_symbols -o "$BUILD_DIR/libfreetds-$arch.a" \
+    # One dynamic library per arch holding FreeTDS and the OpenSSL it was
+    # built against, so the three can never drift apart. -all_load keeps
+    # every symbol: what's used is decided when an app links.
+    clang -dynamiclib $cflags \
+        -install_name "@rpath/FreeTDS.framework/Versions/A/FreeTDS" \
+        -compatibility_version 1.0 -current_version "$FREETDS_VERSION" \
+        -Wl,-all_load \
         "$staged/lib/libsybdb.a" \
         "$staged/lib/libssl.a" \
-        "$staged/lib/libcrypto.a"
+        "$staged/lib/libcrypto.a" \
+        -liconv \
+        -o "$BUILD_DIR/FreeTDS-$arch"
 }
 
 for arch in "${ARCHS[@]}"; do
     build_arch "$arch"
 done
 
-echo "==> Creating universal archive"
+echo "==> Creating FreeTDS.framework"
 rm -rf "$UNIVERSAL_DIR"
-mkdir -p "$UNIVERSAL_DIR/Headers"
-thin_archives=()
+version_dir="$FRAMEWORK/Versions/A"
+mkdir -p "$version_dir/Headers" "$version_dir/Modules" "$version_dir/Resources"
+thin_libraries=()
 for arch in "${ARCHS[@]}"; do
-    thin_archives+=("$BUILD_DIR/libfreetds-$arch.a")
+    thin_libraries+=("$BUILD_DIR/FreeTDS-$arch")
 done
-lipo -create "${thin_archives[@]}" -output "$UNIVERSAL_DIR/libfreetds.a"
+lipo -create "${thin_libraries[@]}" -output "$version_dir/FreeTDS"
 
 # Headers are identical across arches; take them from the first build.
-cp "$BUILD_DIR/stage-${ARCHS[0]}$INSTALL_PREFIX/include/"*.h "$UNIVERSAL_DIR/Headers/"
 # Top-level *.h only: OpenSSL installs its headers under include/openssl/,
-# and they are not part of the module.
-# No `link` directive: the binary target links the archive itself, and an
-# autolink of "sybdb" would let the linker go searching (and find Homebrew's).
-cat > "$UNIVERSAL_DIR/Headers/module.modulemap" <<'EOF'
-module CSybDB {
+# and they are not part of the framework.
+cp "$BUILD_DIR/stage-${ARCHS[0]}$INSTALL_PREFIX/include/"*.h "$version_dir/Headers/"
+cat > "$version_dir/Modules/module.modulemap" <<'MODULEMAP'
+framework module FreeTDS {
+    header "tds_sysdep_public.h"
     header "sybdb.h"
     export *
 }
-EOF
+MODULEMAP
+
+# FreeTDS and OpenSSL call stat and friends, so the framework declares
+# them, as Apple asks of third-party SDKs.
+cp "$PRIVACY_MANIFEST" "$version_dir/Resources/PrivacyInfo.xcprivacy"
+cat > "$version_dir/Resources/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>FreeTDS</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.oliwonders.FreeTDS</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>FreeTDS</string>
+    <key>CFBundlePackageType</key>
+    <string>FMWK</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$FREETDS_VERSION</string>
+    <key>CFBundleVersion</key>
+    <string>$FREETDS_VERSION</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>MacOSX</string>
+    </array>
+    <key>LSMinimumSystemVersion</key>
+    <string>$MACOSX_DEPLOYMENT_TARGET</string>
+</dict>
+</plist>
+PLIST
+
+# The standard macOS framework layout: everything in Versions/A, reached
+# through symlinks.
+(
+    cd "$FRAMEWORK"
+    ln -s A Versions/Current
+    ln -s Versions/Current/FreeTDS FreeTDS
+    ln -s Versions/Current/Headers Headers
+    ln -s Versions/Current/Modules Modules
+    ln -s Versions/Current/Resources Resources
+)
 
 echo "==> Creating $XCFRAMEWORK"
 rm -rf "$XCFRAMEWORK"
 mkdir -p "$(dirname "$XCFRAMEWORK")"
-xcodebuild -create-xcframework \
-    -library "$UNIVERSAL_DIR/libfreetds.a" \
-    -headers "$UNIVERSAL_DIR/Headers" \
-    -output "$XCFRAMEWORK"
+xcodebuild -create-xcframework -framework "$FRAMEWORK" -output "$XCFRAMEWORK"
 
 echo ""
-echo "Verifying slices and deployment targets:"
-lib="$(find "$XCFRAMEWORK" -name 'libfreetds.a' -print -quit)"
+echo "Verifying slices, deployment target and install name:"
+lib="$(find "$XCFRAMEWORK" -path '*FreeTDS.framework/Versions/A/FreeTDS' -print -quit)"
 lipo -info "$lib"
 for arch in "${ARCHS[@]}"; do
-    tmpdir=$(mktemp -d)
-    lipo -thin "$arch" "$lib" -output "$tmpdir/thin.a"
-    # BSD ar (the one on macOS) has no --output, so extract from inside tmpdir.
-    (cd "$tmpdir" && ar -x thin.a) 2>/dev/null || true
-    # -print -quit rather than a pipe to head: piping into head kills find with
-    # SIGPIPE on a large archive, which pipefail turns into a script failure.
-    first_obj=$(find "$tmpdir" -maxdepth 1 -name '*.o' -print -quit)
     echo -n "  $arch: "
-    if [ -n "$first_obj" ]; then
-        vtool -show-build "$first_obj" 2>/dev/null | grep -E "minos|platform" | tr -s ' \n' ' ' || printf "(unable to read)"
-    else
-        printf "(no object files extracted)"
-    fi
+    vtool -arch "$arch" -show-build "$lib" 2>/dev/null | grep -E "minos|platform" | tr -s ' \n' ' '
     echo ""
-    rm -rf "$tmpdir"
 done
+otool -D "$lib" | tail -1
+# Only system libraries: OpenSSL is inside, not a dependency.
+# Dependency lines start with a tab; the others name each architecture.
+if otool -L "$lib" | grep $'^\t' | grep -v -e "@rpath/FreeTDS.framework" -e "/usr/lib/" -e "/System/Library/"; then
+    echo "❌ Unexpected dependency above"
+    exit 1
+fi
 
 # Nothing from this machine should be baked into the shipped binary.
 if strings -a "$lib" | grep -q -e "$BUILD_DIR" -e "$HOME"; then
@@ -184,7 +233,7 @@ if strings -a "$lib" | grep -q -e "$BUILD_DIR" -e "$HOME"; then
     strings -a "$lib" | grep -e "$BUILD_DIR" -e "$HOME" | sort -u | head
     exit 1
 fi
-grep -q "dbsetltlsverify" "$XCFRAMEWORK"/*/Headers/sybdb.h || { echo "❌ FreeTDS patches missing from headers"; exit 1; }
+grep -q "dbsetltlsverify" "$XCFRAMEWORK"/*/FreeTDS.framework/Headers/sybdb.h || { echo "❌ FreeTDS patches missing from headers"; exit 1; }
 
 # Sign the XCFramework so an app's build can tell where it came from and that
 # it hasn't changed since; Apple expects third-party binary SDKs to be signed.
@@ -192,10 +241,14 @@ grep -q "dbsetltlsverify" "$XCFRAMEWORK"/*/Headers/sybdb.h || { echo "❌ FreeTD
 # from `security find-identity -v -p codesigning`).
 if [ -n "${FREETDSKIT_CODESIGN_IDENTITY:-}" ]; then
     echo "==> Signing $XCFRAMEWORK"
+    # The framework inside, then the XCFramework around it. Apps re-sign the
+    # framework with their own identity when they embed it.
+    codesign --force --timestamp --sign "$FREETDSKIT_CODESIGN_IDENTITY" \
+        "$XCFRAMEWORK"/*/FreeTDS.framework/Versions/A
     codesign --timestamp --sign "$FREETDSKIT_CODESIGN_IDENTITY" "$XCFRAMEWORK"
     codesign --verify --strict --verbose=2 "$XCFRAMEWORK"
 else
     echo "⚠️  Not signed. Set FREETDSKIT_CODESIGN_IDENTITY and run again before tagging a release."
 fi
 
-echo "✅ FreeTDS $FREETDS_VERSION + OpenSSL $OPENSSL_VERSION -> Frameworks/FreeTDS.xcframework"
+echo "✅ FreeTDS $FREETDS_VERSION + OpenSSL $OPENSSL_VERSION -> Frameworks/FreeTDS.xcframework (dynamic)"

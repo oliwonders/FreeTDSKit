@@ -8,7 +8,7 @@
 #ifndef FreeTDSWrapper_h
 #define FreeTDSWrapper_h
 
-#include <sybdb.h>
+#include <FreeTDS/sybdb.h>
 
 // Messages are kept per connection. Every function below that takes a
 // DBPROCESS reads that connection's messages; pass NULL for messages raised

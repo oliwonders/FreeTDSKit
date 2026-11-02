@@ -13,10 +13,11 @@ let package = Package(
         )
     ],
     targets: [
-        // FreeTDS and the OpenSSL it links, as one static universal archive.
-        // Built by Support/buildandlinkfreetds.sh. A binary target rather
-        // than linker flags because SwiftPM rejects unsafeFlags in any
-        // package consumed as a dependency.
+        // FreeTDS and the OpenSSL it links, as one dynamic universal
+        // framework -- dynamic so apps meet FreeTDS's LGPL by embedding it as
+        // a replaceable library. Built by Support/buildandlinkfreetds.sh. A
+        // binary target rather than linker flags because SwiftPM rejects
+        // unsafeFlags in any package consumed as a dependency.
         .binaryTarget(
             name: "FreeTDS",
             path: "Frameworks/FreeTDS.xcframework"
@@ -36,8 +37,8 @@ let package = Package(
                 "CFreeTDS",
             ],
             // Declares the required-reason APIs that FreeTDS and OpenSSL call
-            // (stat and friends: the file-timestamp category). They are linked
-            // statically, so the calls end up in the app's own binary.
+            // (stat and friends: the file-timestamp category). FreeTDS.framework
+            // carries the same manifest.
             resources: [
                 .copy("PrivacyInfo.xcprivacy")
             ]

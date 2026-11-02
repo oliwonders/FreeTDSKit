@@ -2,13 +2,13 @@
 
 FreeTDSKit is a Swift wrapper around the [FreeTDS](https://github.com/FreeTDS/freetds) DB-Library client, exposing a Swift-native API for connecting to Microsoft SQL Server and executing queries without pushing C types into the public interface.
 
-> The package is still evolving, but the current layout is intentionally simple: SwiftPM builds a small C shim, links a vendored static XCFramework, and exposes the result through a Swift actor-based API.
+> The package is still evolving, but the current layout is intentionally simple: SwiftPM builds a small C shim, links a vendored dynamic XCFramework, and exposes the result through a Swift actor-based API.
 
 ## What Is In The Repo
 
 - `Sources/FreeTDSKit`: Swift API surface, including `TDSConnection`, `SQLResult`, and type mapping.
 - `Sources/CFreeTDS`: the C shim (`FreeTDSWrapper.c` / `.h`).
-- `Frameworks/FreeTDS.xcframework`: FreeTDS and OpenSSL as one static, universal (arm64 + x86_64) archive, with the FreeTDS headers.
+- `Frameworks/FreeTDS.xcframework`: `FreeTDS.framework`, a dynamic, universal (arm64 + x86_64) framework holding FreeTDS with OpenSSL linked in, and the FreeTDS headers.
 - `Support/buildandlinkfreetds.sh`: rebuilds OpenSSL and FreeTDS from source for both architectures and regenerates the XCFramework.
 - `Support/generate_freetds_pc.sh`: generates a Homebrew `freetds.pc` file and symlink for local tooling/Xcode header discovery.
 - `Tests/FreeTDSKitTests`: fast unit tests.
@@ -16,7 +16,9 @@ FreeTDSKit is a Swift wrapper around the [FreeTDS](https://github.com/FreeTDS/fr
 
 ## How Linking Works
 
-This package does not expect users to install FreeTDS separately. FreeTDS 1.5.19 (with FreeTDSKit's patches, see `Support/patches`) and OpenSSL 3.5.9, built statically for macOS 15.0 on both arm64 and x86_64, are merged into a single archive and shipped as `Frameworks/FreeTDS.xcframework`. The XCFramework also carries the FreeTDS headers and a `CSybDB` module map.
+This package does not expect users to install FreeTDS separately. FreeTDS 1.5.19 (with FreeTDSKit's patches, see `Support/patches`) and OpenSSL 3.5.9, built for macOS 15.0 on both arm64 and x86_64, are linked into one dynamic framework, `FreeTDS.framework`, shipped as `Frameworks/FreeTDS.xcframework`. The framework also carries the FreeTDS headers (`#include <FreeTDS/sybdb.h>`), a `FreeTDS` module map and a privacy manifest.
+
+**Why dynamic.** FreeTDS is licensed under the LGPL, which lets a closed-source app use it as long as users can replace the library with their own build. As a separate framework inside the app (`Contents/Frameworks/FreeTDS.framework`), it can be; linked statically, every app would have to offer its object files for relinking instead. OpenSSL (Apache 2.0) has no such condition and is linked into the framework statically, so the two always travel together. Xcode embeds and re-signs the framework in any app that uses FreeTDSKit; there is nothing to set up.
 
 `Package.swift` declares it as a binary target, and the `CFreeTDS` shim depends on it:
 
@@ -34,16 +36,16 @@ This package does not expect users to install FreeTDS separately. FreeTDS 1.5.19
 Two reasons it is a binary target rather than linker flags:
 
 - **SwiftPM rejects `unsafeFlags` in any package that is not the root package.** An app that added FreeTDSKit from GitHub failed to resolve while the manifest linked the archives by path.
-- **Nothing is left for the linker to search for.** With `-L` plus `-lsybdb`, the linker takes the first match on its search path and prefers a `.dylib` over a `.a`. An environment that exports `LIBRARY_PATH` (Homebrew setups commonly add `/opt/homebrew/lib`) would silently link a system-wide FreeTDS. The binary target hands the linker the archive directly. For the same reason the module map has no `link` directive.
+- **Nothing is left for the linker to search for.** With `-L` plus `-lsybdb`, the linker takes the first match on its search path and prefers a `.dylib` over a `.a`. An environment that exports `LIBRARY_PATH` (Homebrew setups commonly add `/opt/homebrew/lib`) would silently link a system-wide FreeTDS. The binary target hands the linker the framework directly. For the same reason the module map has no `link` directive.
 
-To check what a build actually linked, `otool -L` should show no `libsybdb`, `libssl` or `libcrypto` entries (they are static), and `FreeTDSKit.getFreeTDSVersion()` should report the version vendored here.
+To check what a build actually linked, `otool -L` on the app's binary should list `@rpath/FreeTDS.framework/Versions/A/FreeTDS` and no `libsybdb`, `libssl` or `libcrypto`, and `FreeTDSKit.versions` should report the versions vendored here.
 
-Because everything is static and universal, the package is suitable for sandboxed and Mac App Store apps. Such an app still needs the `com.apple.security.network.client` entitlement to reach SQL Server, and it cannot read `/usr/local/etc/freetds.conf` or `~/.freetds.conf` from inside the sandbox.
+The framework is universal and self-contained, so the package is suitable for sandboxed and Mac App Store apps. Such an app still needs the `com.apple.security.network.client` entitlement to reach SQL Server, and it cannot read `/usr/local/etc/freetds.conf` or `~/.freetds.conf` from inside the sandbox.
 
 ## App Store Notes
 
-- **Privacy manifest.** FreeTDS and OpenSSL call `stat`, `fstat` and `lstat`, which Apple lists as required-reason APIs (file timestamps). FreeTDSKit ships a `PrivacyInfo.xcprivacy` declaring reason `C617.1` in its resource bundle. Because the libraries are linked statically, those calls end up in the app's own binary, so declare the same reason in the app's privacy manifest too.
-- **Signed XCFramework.** `Frameworks/FreeTDS.xcframework` is signed with a Developer ID Application certificate; `codesign -dvv Frameworks/FreeTDS.xcframework` shows by whom. The build script re-signs when `FREETDSKIT_CODESIGN_IDENTITY` is set. A rebuilt framework is unsigned until then, so sign before tagging a release.
+- **Privacy manifest.** FreeTDS and OpenSSL call `stat`, `fstat` and `lstat`, which Apple lists as required-reason APIs (file timestamps). `FreeTDS.framework` carries a `PrivacyInfo.xcprivacy` declaring reason `C617.1`, as Apple asks of third-party SDKs, and FreeTDSKit's resource bundle declares the same.
+- **Signed XCFramework.** `Frameworks/FreeTDS.xcframework` and the framework inside it are signed with a Developer ID Application certificate; `codesign -dvv Frameworks/FreeTDS.xcframework` shows by whom. The build script signs both when `FREETDSKIT_CODESIGN_IDENTITY` is set. A rebuilt framework is unsigned until then, so sign before tagging a release. Apps re-sign the embedded framework with their own identity.
 - **Sandbox.** Needs the outgoing network connections entitlement (`com.apple.security.network.client`). The macOS root certificates are exported to the app container's caches folder, so no other file access is required.
 
 ## Client Usage
@@ -211,9 +213,9 @@ What that script does:
 2. Applies `Support/patches/freetds-*.patch` to FreeTDS (see the README there; a patch that no longer applies stops the build).
 3. Configures both static-only (`no-shared` / `--disable-shared --enable-static`), with FreeTDS pointed at the OpenSSL it just built.
 4. Installs them into `Support/build/stage-<arch>`, configured as if installed in `/usr/local/freetdskit` so that no path from your machine ends up in the binary.
-5. Does all of that once per architecture (arm64, x86_64), merges each architecture's `libsybdb.a`, `libssl.a` and `libcrypto.a` into one archive with `libtool`, and joins the two with `lipo`.
-6. Regenerates `Frameworks/FreeTDS.xcframework` from that archive and the freshly installed FreeTDS headers, so the headers and library can't drift apart.
-7. Prints each slice's platform and deployment target, which should match the platform in `Package.swift`, and fails if the archive contains a build path or lacks the patches.
+5. Does all of that once per architecture (arm64, x86_64), links each architecture's `libsybdb.a`, `libssl.a` and `libcrypto.a` into one dynamic library, and joins the two with `lipo`.
+6. Assembles `FreeTDS.framework` (library, headers, module map, privacy manifest, Info.plist) and regenerates `Frameworks/FreeTDS.xcframework` from it, so the headers and library can't drift apart.
+7. Prints each slice's platform and deployment target, which should match the platform in `Package.swift`, and fails if the library depends on anything but system libraries, contains a build path, or lacks the patches.
 
 ### 3. Verify the package still links cleanly
 

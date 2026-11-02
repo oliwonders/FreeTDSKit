@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <iconv.h>
-#include <sybdb.h>
+#include <FreeTDS/sybdb.h>
 
 #include "FreeTDSWrapper.h"
 
