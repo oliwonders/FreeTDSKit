@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <iconv.h>
 #include <sybdb.h>
 
 #include "FreeTDSWrapper.h"
@@ -194,6 +195,18 @@ const char* tdsLastErrorMessage(DBPROCESS *dbproc) {
 
 const char* getDBVersion(void) {
     return dbversion();
+}
+
+// The XCFramework carries FreeTDS's headers but not OpenSSL's; the function
+// itself is in the static archive. 0 is OPENSSL_VERSION.
+extern const char *OpenSSL_version(int type);
+
+const char* getOpenSSLVersion(void) {
+    return OpenSSL_version(0);
+}
+
+int getLibiconvVersion(void) {
+    return _libiconv_version;
 }
 
 static pthread_once_t dbLibraryOnce = PTHREAD_ONCE_INIT;

@@ -52,6 +52,10 @@ typedef struct {
 
 
 const char* getDBVersion(void);
+// The OpenSSL linked into the archive, e.g. "OpenSSL 3.5.9 30 Jun 2026".
+const char* getOpenSSLVersion(void);
+// The system libiconv FreeTDS converts character sets with, as 0xMMmm.
+int getLibiconvVersion(void);
 // Initialize DB-Library and install the message handlers. Safe to call any
 // number of times from any thread; only the first call does anything.
 int initializeDBLibrary(void);

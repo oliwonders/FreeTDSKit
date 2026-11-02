@@ -238,7 +238,8 @@ If the new FreeTDS version changes transitive requirements, add them as `linkedL
 The package exposes the linked library version via:
 
 ```swift
-FreeTDSKit.getFreeTDSVersion()
+FreeTDSKit.getFreeTDSVersion()   // "freetds v1.5.19"
+FreeTDSKit.versions              // freeTDS "1.5.19", openSSL "3.5.9", libiconv "1.11"
 ```
 
 The unit test suite already exercises that path. Confirm it reports the version you just vendored -- if it reports a different one, the build linked a system copy rather than the archive in this repo (see [How Linking Works](#how-linking-works)).
