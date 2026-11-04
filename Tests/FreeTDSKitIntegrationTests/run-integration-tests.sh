@@ -15,8 +15,6 @@ export FREETDSKIT_SQL_PASSWORD
 export FREETDSKIT_SQL_DB
 export FREETDSKIT_RUN_INTEGRATION_TESTS
 
-SQLCMD="/opt/homebrew/bin/sqlcmd"
-
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -33,6 +31,9 @@ check_brew_package() {
 # Check for required packages
 check_brew_package "docker"
 check_brew_package "sqlcmd"
+# Homebrew's Go sqlcmd, not mssql-tools18's: that one needs Microsoft's ODBC
+# driver, which can't load OpenSSL 4.
+SQLCMD="$(brew --prefix sqlcmd)/bin/sqlcmd"
 
 sqlcmd_run() {
     "$SQLCMD" -b -C -S "$FREETDSKIT_SQL_SERVER,$FREETDSKIT_SQL_PORT" -U "$FREETDSKIT_SQL_USER" -P "$FREETDSKIT_SQL_PASSWORD" "$@"
