@@ -135,7 +135,7 @@ public struct ConnectionConfiguration: Sendable {
     /// self-signed certificates only: it lets anyone on the network path
     /// impersonate the server. Ignored with `.strict`.
     public var trustServerCertificate = false
-    /// PEM file of CA certificates to trust instead of the macOS system roots,
+    /// PEM file of CA certificates to trust instead of the system roots,
     /// e.g. a company CA or a server's self-signed certificate.
     public var certificateAuthorityFile: URL?
     /// Name the server certificate must match, when it differs from `host`
@@ -290,7 +290,7 @@ public actor TDSConnection {
     ///   - trustServerCertificate: skip checking the server certificate. For
     ///     development servers only; ignored with `.strict`.
     ///   - certificateAuthorityFile: PEM file of CAs to trust instead of the
-    ///     macOS system roots.
+    ///     system roots.
     ///   - hostNameInCertificate: name the certificate must match, when it
     ///     differs from the host in `server`.
     public init(
