@@ -1,0 +1,5 @@
+framework module FreeTDS {
+    header "tds_sysdep_public.h"
+    header "sybdb.h"
+    export *
+}
