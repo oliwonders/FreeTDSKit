@@ -121,8 +121,9 @@ jobs:
           device=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           devices = json.load(sys.stdin)["devices"]
-          print(next(d["udid"] for runtime, ds in devices.items() if "iOS" in runtime
-                     for d in ds if d["name"].startswith("iPhone")))')
+          print(next((d["udid"] for runtime, ds in devices.items() if "iOS" in runtime
+                      for d in ds if d["name"].startswith("iPhone")), ""))')
+          [ -n "$device" ] || { echo "❌ no iPhone simulator available on this runner"; exit 1; }
           xcodebuild test -scheme FreeTDSKit -destination "id=$device" \
             -only-testing:FreeTDSKitTests
 
