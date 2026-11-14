@@ -20,13 +20,13 @@ set -euo pipefail
 MACOSX_DEPLOYMENT_TARGET="15.0"
 IPHONEOS_DEPLOYMENT_TARGET="17.0"
 OPENSSL_VERSION="3.5.9"
-FREETDS_VERSION="1.5.19"
+FREETDS_VERSION="1.5.21"
 # SHA-256 of each source tarball. Update alongside the version, from a source
 # other than the download itself: openssl.org/source/<tarball>.sha256 (also on
 # the GitHub release), and freetds.org/files/stable/<tarball>.md5 cross-checked
 # against a second download.
 OPENSSL_SHA256="603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a"
-FREETDS_SHA256="ff70d0c8ae8dd23e7b1314274d6e9d30b479998415760b3fa656754b737c2bd6"
+FREETDS_SHA256="343c69361801283818750d66f824a655f4c48344643eb253e2b12b2dcf50a0e7"
 # Each platform becomes one slice of the XCFramework.
 PLATFORMS=(macos ios iossimulator)
 
