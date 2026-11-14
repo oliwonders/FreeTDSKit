@@ -6,7 +6,7 @@
 	<dict>
 		<key>ios-arm64/FreeTDS.framework/FreeTDS</key>
 		<data>
-		LXuoCdmYhBUEDVCSNWXWVTSXTvw=
+		VpKOPQWyXix50Vq8s6ys4BaMVsw=
 		</data>
 		<key>ios-arm64/FreeTDS.framework/Headers/bkpublic.h</key>
 		<data>
@@ -50,7 +50,7 @@
 		</data>
 		<key>ios-arm64/FreeTDS.framework/Info.plist</key>
 		<data>
-		rbndUSTwh71ptqlld6Z3EsA6KNA=
+		lWa4P1C6Zvcxnp4YirWbaE5PHX4=
 		</data>
 		<key>ios-arm64/FreeTDS.framework/Modules/module.modulemap</key>
 		<data>
@@ -62,11 +62,11 @@
 		</data>
 		<key>ios-arm64/FreeTDS.framework/_CodeSignature/CodeResources</key>
 		<data>
-		2FkcyRzKxKUlVTUQp0pCbe65BnY=
+		pj05/yD5oP6w5dz3ExNivS9yoVA=
 		</data>
 		<key>ios-arm64_x86_64-simulator/FreeTDS.framework/FreeTDS</key>
 		<data>
-		1NazAjO6tGxRWtQ9s6zw2NZeOcA=
+		e/KgKyfTrlbvcbctw+yzhJeP+/M=
 		</data>
 		<key>ios-arm64_x86_64-simulator/FreeTDS.framework/Headers/bkpublic.h</key>
 		<data>
@@ -110,7 +110,7 @@
 		</data>
 		<key>ios-arm64_x86_64-simulator/FreeTDS.framework/Info.plist</key>
 		<data>
-		BxMwyOFICI42yFAgg6SWfllIR8A=
+		GM92yoYKf1MPVT4Mt0VNVLLnyV8=
 		</data>
 		<key>ios-arm64_x86_64-simulator/FreeTDS.framework/Modules/module.modulemap</key>
 		<data>
@@ -122,11 +122,11 @@
 		</data>
 		<key>ios-arm64_x86_64-simulator/FreeTDS.framework/_CodeSignature/CodeResources</key>
 		<data>
-		VRJo4MKiF4SQGj4dTMJ8l0ZResI=
+		1wbJbvDP6fdNYMcJl4aH9DKWDMI=
 		</data>
 		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/FreeTDS</key>
 		<data>
-		FH7YaPMPiUAor7tgLZvI8ce4vZs=
+		5fTKccZgRee9G2h1DmgogZC9JkY=
 		</data>
 		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/bkpublic.h</key>
 		<data>
@@ -174,7 +174,7 @@
 		</data>
 		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Resources/Info.plist</key>
 		<data>
-		cYJnQBJpZ8j1M8OmvQ7YCUgHsU8=
+		rQro2VGb0wm9kRsL1xzVQQzroRE=
 		</data>
 		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Resources/PrivacyInfo.xcprivacy</key>
 		<data>
@@ -182,7 +182,7 @@
 		</data>
 		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/_CodeSignature/CodeResources</key>
 		<data>
-		Kl3Eaphw7388l8jThd31ySL+Vgs=
+		CfVLKuxRuFGbdy0HA8CE/i4Cdhs=
 		</data>
 	</dict>
 	<key>files2</key>
@@ -191,7 +191,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			Utj9v6L0a0uOJOsyagmT+ym7mKiqt7LsVwSC0bEmXY8=
+			oXMrav2zspz84UL80ATgedSYfJcAN7dkrFb5trxBVhs=
 			</data>
 		</dict>
 		<key>ios-arm64/FreeTDS.framework/Headers/bkpublic.h</key>
@@ -268,7 +268,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			DKooboBqXdn0M3jKzEJ+FsFv0Tdeh/Gyn+CDsVu8ums=
+			BET4WDJzQhCqLP5RLHLbmPufx04Bns3ncGgJPjqqw8o=
 			</data>
 		</dict>
 		<key>ios-arm64/FreeTDS.framework/Modules/module.modulemap</key>
@@ -289,14 +289,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			49FDhJn44PcHURHwRUO4E8RtwiIUlHCW2ucJWZJnEdA=
+			RUz6EO4+b77D7fuA/Pme1csxJj7MnTkdiS8+9r8xXSY=
 			</data>
 		</dict>
 		<key>ios-arm64_x86_64-simulator/FreeTDS.framework/FreeTDS</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			hgCNTq5+Pm1pSOjmyPfZVfgBCU+/y9+4lTTQ6Jim+PI=
+			WO2R2iy+g0c6pFZgSHdHZVeDqpTls4lKhFl9ec7840k=
 			</data>
 		</dict>
 		<key>ios-arm64_x86_64-simulator/FreeTDS.framework/Headers/bkpublic.h</key>
@@ -373,7 +373,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			/6tXiH8orqOeFFrbM4+vGkLfjgkzEr8RBbzsPAVwsd8=
+			cf+KptxZsboOs9/XjgawQEtA1dWG7+a1F472ESImjpg=
 			</data>
 		</dict>
 		<key>ios-arm64_x86_64-simulator/FreeTDS.framework/Modules/module.modulemap</key>
@@ -394,7 +394,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			2a7KO36qZ61XCUlYFzMeDlZb0r0M8/YV7f1ZYwTs0rs=
+			qospykUDT1gEQIQyiT0Pjp12R+4hvyOLVnzbY2qrWQ4=
 			</data>
 		</dict>
 		<key>macos-arm64_x86_64/FreeTDS.framework/FreeTDS</key>
@@ -421,7 +421,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			LB8ZYpv7D10nyXxWIBVun9YSdVHLyFI4smQb+APdcCM=
+			dn3D/g5Qaj0ykEaWwB3ZzxDfZslIbNsB8pnhV8aE4Ag=
 			</data>
 		</dict>
 		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Headers/bkpublic.h</key>
@@ -505,7 +505,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			BI5tRuM4uELsJHN85ijXzAY5HUqSk/CFcMglgboMl7M=
+			LHhb4hrFRX7LAK17pkd5MfuOcxDSESru9EuwOIo45GI=
 			</data>
 		</dict>
 		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/A/Resources/PrivacyInfo.xcprivacy</key>
@@ -519,7 +519,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			i0m6NFr6YGKbzQ5rnDtfHGvW0Xc2TiL8v0xVOaEgKSs=
+			285syN3XQkssJsjP82QR/qHUmV0j9AGg0noxn/AvDXs=
 			</data>
 		</dict>
 		<key>macos-arm64_x86_64/FreeTDS.framework/Versions/Current</key>
