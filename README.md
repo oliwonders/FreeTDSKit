@@ -210,18 +210,20 @@ The build needs Xcode with the macOS and iOS SDKs (`xcrun --sdk iphoneos --show-
 
 ### 1. Update the versions in the build script
 
-Edit [Support/buildandlinkfreetds.sh](/Users/david/dev/oliwonders/FreeTDSKit/Support/buildandlinkfreetds.sh) and change either or both of:
+Run `Support/bump-upstream.sh` (`--check` only reports). It finds the newest stable FreeTDS and the newest OpenSSL in the pinned series, skipping release candidates, and pins each with a SHA-256 that two independent sources agree on: freetds.org's MD5 plus GitHub's recorded checksum for the same release (whose unpacked source must match file for file), or openssl.org's and GitHub's SHA-256 for OpenSSL. A FreeTDS release without a GitHub release yet is left for later.
+
+Or edit [Support/buildandlinkfreetds.sh](/Users/david/dev/oliwonders/FreeTDSKit/Support/buildandlinkfreetds.sh) by hand and change either or both of:
 
 ```bash
 OPENSSL_VERSION="3.5.9"
-FREETDS_VERSION="1.5.19"
+FREETDS_VERSION="1.5.21"
 OPENSSL_SHA256="..."
 FREETDS_SHA256="..."
 ```
 
 Take each SHA-256 from upstream rather than from your own download: openssl.org publishes `<tarball>.sha256` (also attached to the GitHub release), and freetds.org publishes `<tarball>.md5` to cross-check a second download against. The script refuses to build from a tarball that doesn't match.
 
-A weekly GitHub Actions job (`.github/workflows/upstream-watch.yml`) opens an issue when either project publishes a newer release, flagging OpenSSL security releases.
+A weekly GitHub Actions job (`.github/workflows/upstream-watch.yml`) does all of this when either project publishes a newer release: it runs the bump script, builds the XCFramework, runs the unit tests on macOS and the iOS Simulator, and opens a pull request. The framework in that pull request is unsigned, and the integration tests need Docker, so before tagging, rebuild with your signing identity and run the integration tests on a Mac (step 2 and [Integration tests](#integration-tests)). If the build fails, typically because a patch in `Support/patches` no longer applies, it opens an issue instead. It needs "Allow GitHub Actions to create and approve pull requests" turned on in the repository's Actions settings.
 
 Prefer an OpenSSL LTS release (the 3.5 series is supported into 2030) over the newest one, since a vendored archive only gets refreshed when someone runs this script.
 
