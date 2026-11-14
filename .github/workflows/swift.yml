@@ -21,3 +21,20 @@ jobs:
 
     - name: Run unit tests
       run: swift test --filter FreeTDSKitTests
+
+  ios:
+    runs-on: macos-15
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Xcode version
+      run: xcodebuild -version
+
+    # swift build can only target the Mac; xcodebuild builds the package's
+    # FreeTDSKit scheme against the XCFramework's iOS slices.
+    - name: Build for iOS Simulator
+      run: xcodebuild build -scheme FreeTDSKit -destination 'generic/platform=iOS Simulator'
+
+    - name: Build for iOS
+      run: xcodebuild build -scheme FreeTDSKit -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO

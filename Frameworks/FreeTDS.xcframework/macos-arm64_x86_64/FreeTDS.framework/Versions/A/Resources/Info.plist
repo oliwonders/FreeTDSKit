@@ -24,5 +24,13 @@
     </array>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
+    <key>DTPlatformName</key>
+    <string>macosx</string>
+    <key>DTPlatformVersion</key>
+    <string>27.2</string>
+    <key>DTSDKName</key>
+    <string>macosx27.2</string>
+    <key>DTSDKBuild</key>
+    <string>26B118</string>
 </dict>
 </plist>

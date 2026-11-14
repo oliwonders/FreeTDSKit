@@ -21,11 +21,32 @@ struct TLSTests {
         let file = try TrustedRoots.systemRootsFile()
         let pem = try String(contentsOf: file, encoding: .utf8)
         let count = pem.components(separatedBy: "-----BEGIN CERTIFICATE-----").count - 1
-        // macOS ships well over a hundred roots; a handful would mean the export
+        // Apple ships well over a hundred roots; a handful would mean the export
         // picked up the wrong store.
         #expect(count > 50)
         #expect(pem.components(separatedBy: "-----END CERTIFICATE-----").count - 1 == count)
     }
+
+    /// The snapshot iOS verifies against ships on every platform, so it is
+    /// checked on macOS too.
+    @Test func bundledRootsAreUsablePEM() throws {
+        let file = try TrustedRoots.bundledRootsFile()
+        let pem = try String(contentsOf: file, encoding: .utf8)
+        let blocks = pem.components(separatedBy: "-----BEGIN CERTIFICATE-----").dropFirst()
+        #expect(blocks.count > 50)
+        for block in blocks {
+            let body = block.components(separatedBy: "-----END CERTIFICATE-----")
+            #expect(body.count == 2)
+            let der = Data(base64Encoded: body[0], options: .ignoreUnknownCharacters)
+            #expect(der != nil && der!.count > 100)
+        }
+    }
+
+    #if !os(macOS)
+    @Test func systemRootsAreTheBundledSnapshotOffMacOS() throws {
+        #expect(try TrustedRoots.systemRootsFile() == TrustedRoots.bundledRootsFile())
+    }
+    #endif
 
     @Test func verificationUsesSystemRootsByDefault() throws {
         let caFile = try TrustedRoots.caFile(

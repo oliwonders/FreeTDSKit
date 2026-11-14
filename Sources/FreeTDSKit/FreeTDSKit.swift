@@ -19,7 +19,7 @@ public struct FreeTDSKit {
         public let freeTDS: String
         /// e.g. "3.5.9", statically linked with FreeTDS.
         public let openSSL: String
-        /// The macOS libiconv FreeTDS converts character sets with, e.g. "1.11".
+        /// The system libiconv FreeTDS converts character sets with, e.g. "1.11".
         public let libiconv: String
     }
 

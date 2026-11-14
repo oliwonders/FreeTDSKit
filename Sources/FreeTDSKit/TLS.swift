@@ -4,7 +4,9 @@
 //
 
 import Foundation
+#if os(macOS)
 import Security
+#endif
 
 /// How a connection uses TLS. The names follow Microsoft's `Encrypt=` keyword.
 public enum TDSEncryption: String, Sendable, CaseIterable {
@@ -35,16 +37,21 @@ enum TrustedRoots {
         let reason: String
     }
 
-    /// A PEM file holding the macOS system root certificates, written once per
-    /// process to the caches directory (inside the container when sandboxed).
+    /// A PEM file holding the system root certificates, which FreeTDS is
+    /// pointed at because OpenSSL can't read Apple's trust store, and the CA
+    /// path compiled into it doesn't exist on users' devices.
     ///
-    /// OpenSSL can't read the macOS trust store, and the CA path compiled into
-    /// it doesn't exist on users' machines, so FreeTDS is pointed at this file.
-    /// Rewriting it at each launch keeps it in step with macOS updates.
+    /// - macOS: the live trust store, written once per process to the caches
+    ///   directory (inside the container when sandboxed). Rewriting it at each
+    ///   launch keeps it in step with macOS updates.
+    /// - iOS and iPadOS: no API lists the trusted roots, so this is
+    ///   ``bundledRootsFile()``, a snapshot of the same Apple root program
+    ///   taken when FreeTDSKit was built.
     static func systemRootsFile() throws(ExportError) -> URL {
         try systemRoots.get()
     }
 
+    #if os(macOS)
     private static let systemRoots: Result<URL, ExportError> = Result { () throws(ExportError) -> URL in
         var anchors: CFArray?
         let status = SecTrustCopyAnchorCertificates(&anchors)
@@ -73,6 +80,22 @@ enum TrustedRoots {
         } catch {
             throw ExportError(reason: "Could not save the macOS root certificates: \(error.localizedDescription)")
         }
+    }
+    #else
+    private static let systemRoots: Result<URL, ExportError> = Result { () throws(ExportError) -> URL in
+        try bundledRootsFile()
+    }
+    #endif
+
+    /// Apple's root certificates as of FreeTDSKit's build, in its resource
+    /// bundle (`AppleRootCertificates.pem`, written by
+    /// `Support/export-apple-roots.sh`). Present on every platform; used on
+    /// those that can't export the live trust store.
+    static func bundledRootsFile() throws(ExportError) -> URL {
+        guard let file = Bundle.module.url(forResource: "AppleRootCertificates", withExtension: "pem") else {
+            throw ExportError(reason: "FreeTDSKit's root certificates (AppleRootCertificates.pem) are missing")
+        }
+        return file
     }
 
     /// The CA file to hand FreeTDS, or nil to skip verification.

@@ -5,7 +5,7 @@
 
 import CFreeTDS
 import Dispatch
-import Synchronization
+import os
 
 /// One open DB-Library connection, and the serial queue every call on it runs on.
 ///
@@ -73,9 +73,11 @@ final class ConnectionHandle: @unchecked Sendable {
 }
 
 /// Set when a row stream's consumer goes away, read by the queue filling it.
+///
+/// An unfair lock rather than `Synchronization.Atomic`, which needs iOS 18.
 final class CancellationFlag: Sendable {
-    private let value = Atomic<Bool>(false)
+    private let value = OSAllocatedUnfairLock(initialState: false)
 
-    func cancel() { value.store(true, ordering: .relaxed) }
-    var isCancelled: Bool { value.load(ordering: .relaxed) }
+    func cancel() { value.withLock { $0 = true } }
+    var isCancelled: Bool { value.withLock { $0 } }
 }
